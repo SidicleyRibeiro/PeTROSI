@@ -11,7 +11,7 @@ wells).
 So far, the code only calculates the pressure field of a given problem in 2D, using the formulation derived by Gao and Wu,
 hence, it only deals with monophase flow. 
 
-It is used the MOAB package to manage the topology of meshes. Further will be used...
+It is used the PYMOAB package to manage the topology of meshes. Further will be used the PYTRILLINOS to the solver.
 
 # To-do list:
 
