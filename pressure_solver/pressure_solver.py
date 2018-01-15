@@ -397,6 +397,13 @@ def explicit_weights(interp_node):
     print("pesos: ", mb.get_coords([interp_node]), volumes_weights)
     return volumes_weights
 
+def well_influence(coord_x, coord_y, coord_z, radius, source_term):
+    all_volumes = mb.get_entities_by_dimension(root_set, 2)
+    for a_volume in all_volumes:
+        volume_centroid = get_centroid(a_volume)
+
+    pass
+
 
 def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
     nodes_weights = {}
