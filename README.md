@@ -1,6 +1,6 @@
 
 
-# Implementation of squemes to calculate multiphase flow in porous media
+# Multiphase flow in porous media
 
 This simple code in Python aims to calculate the pressure and saturation fields of multiphase flow in porous media, 
 along with a mesh adaptation of type h. 
@@ -23,4 +23,4 @@ After these features, it's made a 1st version of a 2D flow and next...
 
 - Make everything 3D (BIG CHALLENGE!).
 
-The 2nd version will be performed with the @PADMEC/Elliptic package, which is about to get its 1st version.
+The 2nd version will be performed with the [ELLIPTIc](https://github.com/padmec-reservoir/ELLIPTIc) package, about to get its 1st version, developed by [Guilherme Caminha](https://github.com/gpkc) at the [PADMEC Group](https://github.com/padmec-reservoir) of the [Federal University of Pernambuco](https://www.ufpe.br].
