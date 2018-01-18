@@ -1,13 +1,19 @@
-import pymoab
 import numpy as np
+from math import sqrt
+from math import pi
 
-class Preprocessor(pymoab):
+class Preprocessor():
 
 
-    mb = pymoab.core.Core()
+    from pymoab import core
+    from pymoab import types
+    from pymoab import topo_util
+
+
+    mb = core.Core()
     root_set = mb.get_root_set()
-    types = pymoab.types
-    mtu = pymoab.topo_util.MeshTopoUtil(mb)
+    # types = pymoab.types
+    mtu = topo_util.MeshTopoUtil(mb)
 
     pressure_tag = mb.tag_get_handle(
         "pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
@@ -17,6 +23,9 @@ class Preprocessor(pymoab):
 
     neumann_tag = mb.tag_get_handle(
         "neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+    perm_tag = mb.tag_get_handle(
+        "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
     error_tag = mb.tag_get_handle(
         "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
@@ -33,29 +42,28 @@ class Preprocessor(pymoab):
     full_edges_tag = mb.tag_get_handle(
         "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
-    perm_tag = mb.tag_get_handle(
-        "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    weights_tag = mb.tag_get_handle(
-        "weights", 2, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
     all_b_conditions = []
+
+
     def __init__(self, mesh_file, b_condition):
         self.__class__.mb.load_file(mesh_file)
         self.b_conditions = b_condition
         self.__class__.all_b_conditions.append(b_condition)
 
-    def material_set_init(self):
+    # def material_set_init(self):
         self.physical_tag = self.__class__.mb.tag_get_handle("MATERIAL_SET")
         self.physical_sets = self.__class__.mb.get_entities_by_type_and_tag(
             0, self.__class__.types.MBENTITYSET, np.array(
             (self.physical_tag,)), np.array((None,)))
 
-    def b_condition_values(self, b_condition_type):
+
+    def bound_condition_values(self, b_condition_type):
         ids_values = self.b_conditions[b_condition_type]
         ids = list(ids_values.keys())
 
-        bound_nodes = set()
+        self.dirich_nodes = set()
+        self.neu_nodes = set()
         for id_ in ids:
             for tag in self.physical_sets:
                 tag_id = self.__class__.mb.tag_get_data(
@@ -65,22 +73,59 @@ class Preprocessor(pymoab):
                 if tag_id == id_:
                     for ent in entity_set:
                         nodes = self.__class__.mtu.get_bridge_adjacencies(ent, 0, 0)
-                        bound_nodes = bound_nodes | set(nodes)
 
                         if b_condition_type == "dirichlet":
-                            self.__class__.mb.tag_set_data(dirichlet_tag, ent, [ids_values[id_]])
+
+                            self.dirich_nodes = self.dirich_nodes | set(nodes)
+
+                            self.__class__.mb.tag_set_data(self.__class__.dirichlet_tag, ent, [ids_values[id_]])
                             self.__class__.mb.tag_set_data(
                                     self.__class__.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
                         if b_condition_type == "neumann":
-                            self.__class__.mb.tag_set_data(neumann_tag, ent, [ids_values[id_]])
+
+                            self.neu_nodes = self.neu_nodes | set(nodes)
+
+                            self.__class__.mb.tag_set_data(self.__class__.neumann_tag, ent, [ids_values[id_]])
                             self.__class__.mb.tag_set_data(
                                     self.__class__.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
-        return list(bound_nodes)
+
+    def get_dirichlet_nodes(self):
+        return self.dirich_nodes
+
+
+    def get_neumann_nodes(self):
+        return self.neu_nodes
+
 
     def well_condition(self, coords, radius):
         pass
+
+
+    @staticmethod
+    def norma(vector):
+        vector = np.array(vector)
+        dot_product = np.dot(vector, vector)
+        mag = sqrt(dot_product)
+        return mag
+
+
+    def ang_vectors(self, u, v):
+        u = np.array(u)
+        v = np.array(v)
+        dot_product = np.dot(u,v)
+        norms = self.norma(u)*self.norma(v)
+        try:
+            arc = dot_product/norms
+            if np.fabs(arc) > 1:
+                raise ValueError('Arco maior que 1 !!!')
+        except ValueError:
+            arc = np.around(arc)
+        ang = np.arccos(arc)
+        #print ang, arc, dot_product, norms, u, v
+        return ang
+
 
     def get_centroid(self, entity):
 
@@ -101,7 +146,7 @@ class Preprocessor(pymoab):
         vectors = np.reshape(vectors, (len(verts), 3))
         directions = np.zeros(len(vectors))
         for j in range(len(vectors)):
-            direction = ang_vectors(vectors[j], [1,0,0])
+            direction = self.ang_vectors(vectors[j], [1,0,0])
             if vectors[j, 1] <= 0:
                 directions[j] = directions[j] + 2.0*pi - direction
             else:
@@ -111,22 +156,24 @@ class Preprocessor(pymoab):
         total_area = 0
         wgtd_cent = 0
         for i in range(len(vect_std)):
-            norma1 = norma(vect_std[i])
-            norma2 = norma(vect_std[i-1])
-            ang_vect = ang_vectors(vect_std[i], vect_std[i-1])
+            norma1 = self.norma(vect_std[i])
+            norma2 = self.norma(vect_std[i-1])
+            ang_vect = self.ang_vectors(vect_std[i], vect_std[i-1])
             area_tri = (0.5)*norma1*norma2*np.sin(ang_vect)
             cent_tri = pseudo_cent + (1/3.0)*(vect_std[i] + vect_std[i-1])
             wgtd_cent = wgtd_cent + area_tri*cent_tri
             total_area = total_area + area_tri
 
-        self.centroide = wgtd_cent/total_area
-        return self.centroide
+        centroide = wgtd_cent/total_area
+        return centroide
 
-    def permeability(self, block_coords):
-        self.perm_tensor = [1.0, 0.0, 0.0,
-                            0.0, 1.0, 0.0,
-                            0.0, 0.0, 1.0]
-        return self.perm_tensor
+
+    @staticmethod
+    def permeability(block_coords):
+        perm_tensor = [1.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0,
+                        0.0, 0.0, 1.0]
+        return perm_tensor
 
     def all_hanging_nodes_full_edges(self):
         entities = self.__class__.mb.get_entities_by_dimension(self.__class__.root_set, 2)
@@ -134,9 +181,9 @@ class Preprocessor(pymoab):
 
             full_edges = self.__class__.mb.get_adjacencies(ent, 1, True)
             full_edge_meshset = self.__class__.mb.create_meshset()
-            mb.add_entities(self.__class__.full_edge_meshset, full_edges)
-            mb.tag_set_data(self.__class__.full_edges_tag, ent, full_edge_meshset)
-            mb.tag_set_data(self.__class__.perm_tag, ent, self.permeability(self.get_centroid(ent)))
+            self.__class__.mb.add_entities(full_edge_meshset, full_edges)
+            self.__class__.mb.tag_set_data(self.__class__.full_edges_tag, ent, full_edge_meshset)
+            self.__class__.mb.tag_set_data(self.__class__.perm_tag, ent, self.permeability(self.get_centroid(ent)))
 
-    def mesh_data(self):
-        return self.__class__.mb
+    # def mesh_instance(self):
+    #     return self.__class__.self
