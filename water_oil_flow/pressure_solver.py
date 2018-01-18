@@ -401,7 +401,7 @@ def well_influence(coord_x, coord_y, coord_z, radius, source_term):
     all_volumes = mb.get_entities_by_dimension(root_set, 2)
     for a_volume in all_volumes:
         volume_centroid = get_centroid(a_volume)
-        
+
     pass
 
 
@@ -601,6 +601,35 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
     mb.tag_set_data(pressure_tag, two_d_entities, volume_pressures.flatten())
     mb.write_file("out_file.vtk")
     return volume_pressures
+
+def node_pressure(node, pressure_tag, K):
+    pass
+    #root_set= mb.get_root_set()
+    try:
+        node_press = mb.tag_get_data(dirichlet_tag, node)
+
+    except RuntimeError:
+
+        entities_NP = mb.get_entities_by_dimension(root_set, 2)
+        around_blocks = mb.get_adjacencies(node, 2)
+        sum_psi = 0.0
+        wgtd_press = 0.0
+        for a_block in around_blocks:
+            block_press = mb.tag_get_data(pressure_tag, a_block)
+            psi = psi_LPEW2(node, a_block, K)
+            wgtd_press = wgtd_press + psi*block_press
+            sum_psi = sum_psi + psi
+
+        node_press = wgtd_press/sum_psi
+
+        try:
+            neumann_flow = mb.tag_get_data(neumann_tag, node)
+            neu_add = Neumann_treat_Bk(node, neumann_tag, K)
+            node_press = node_press - neu_add/sum_psi
+        except RuntimeError:
+            pass
+
+    return node_press
 
 pressures = MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes)
 print("PRESSURES:", pressures)
