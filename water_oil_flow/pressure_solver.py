@@ -16,112 +16,6 @@ import numpy as np
 import sys
 import random
 
-mb = core.Core()
-mtu = topo_util.MeshTopoUtil(mb)
-mb.load_file('geometry_test.msh')
-root_set = mb.get_root_set()
-
-# Tag que vai aparecer no VTK
-pressure_tag = mb.tag_get_handle(
-    "pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)  #Tag para a solucao
-
-# Tag pra condição de dirichlet
-dirichlet_tag = mb.tag_get_handle(
-    "dirichlet", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)  #Tag para a valores da condicao de contorno de dirichlet
-
-neumann_tag = mb.tag_get_handle(
-    "neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True) #Tag para os valores de contorno de Neumann
-
-error_tag = mb.tag_get_handle(
-    "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-node_pressure_tag = mb.tag_get_handle(
-    "node_pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-ref_degree_tag = mb.tag_get_handle(
-    "ref_degree", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-hanging_nodes_tag = mb.tag_get_handle(
-    "hanging_nodes", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
-
-full_edges_tag = mb.tag_get_handle(
-    "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
-
-perm_tag = mb.tag_get_handle(
-    "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-weights_tag = mb.tag_get_handle(
-    "weights", 2, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-#para problema sem poço
-
-physical_tag = mb.tag_get_handle("MATERIAL_SET")
-
-physical_sets = mb.get_entities_by_type_and_tag(
-    0, types.MBENTITYSET, np.array((physical_tag,)), np.array((None,)))
-
-dirichlet_nodes = set()
-neumann_nodes = set()
-for tag in physical_sets:
-    tag_id = mb.tag_get_data(physical_tag, np.array([tag]), flat=True)
-
-    if tag_id == 201:
-        entity_set_201 = mb.get_entities_by_handle(tag, True)
-        for ent_201 in entity_set_201:
-            mb.tag_set_data(neumann_tag, ent_201, [0.0,])
-            bound_nodes_201 = mtu.get_bridge_adjacencies(ent_201, 0, 0)
-            neumann_nodes = neumann_nodes | set(bound_nodes_201)
-            mb.tag_set_data(neumann_tag, bound_nodes_201, np.repeat([0.0], len(bound_nodes_201)))
-
-    if tag_id == 202:
-        entity_set_202 = mb.get_entities_by_handle(tag, True)
-        for ent_202 in entity_set_202:
-            mb.tag_set_data(neumann_tag, ent_202, [1.0,])
-            bound_nodes_202 = mtu.get_bridge_adjacencies(ent_202, 0, 0)
-            neumann_nodes = neumann_nodes | set(bound_nodes_202)
-            mb.tag_set_data(neumann_tag, bound_nodes_202, np.repeat([1.0], len(bound_nodes_202)))
-
-for tag in physical_sets:
-    tag_id = mb.tag_get_data(physical_tag, np.array([tag]), flat=True)
-
-    if tag_id == 101:
-        entity_set_101 = mb.get_entities_by_handle(tag, True)
-        for ent_101 in entity_set_101:
-            mb.tag_set_data(dirichlet_tag, ent_101, [0.0,])
-            bound_nodes_101 = mtu.get_bridge_adjacencies(ent_101, 0, 0)
-            dirichlet_nodes = dirichlet_nodes | set(bound_nodes_101)
-            mb.tag_set_data(dirichlet_tag, bound_nodes_101, np.repeat([0.0], len(bound_nodes_101)))
-    if tag_id == 102:
-        entity_set_102 = mb.get_entities_by_handle(tag, True)
-        for ent_102 in entity_set_102:
-            mb.tag_set_data(dirichlet_tag, ent_102, [1.0,])
-            bound_nodes_102 = mtu.get_bridge_adjacencies(ent_102, 0, 0)
-            dirichlet_nodes = dirichlet_nodes | set(bound_nodes_102)
-            mb.tag_set_data(dirichlet_tag, bound_nodes_102, np.repeat([1.0], len(bound_nodes_102)))
-
-neumann_nodes = neumann_nodes - dirichlet_nodes
-# intern_nodes includes neumann_nodes
-intern_nodes = set(mb.get_entities_by_dimension(root_set, 0)) - dirichlet_nodes
-intern_nodes = intern_nodes - neumann_nodes
-
-dirichlet_nodes = list(dirichlet_nodes)
-neumann_nodes = list(neumann_nodes)
-intern_nodes = list(intern_nodes)
-
-#print("Coords: ", mb.get_coords([3]))
-#new_node_tag_dirichlet = mb.tag_get_data(dirichlet_tag, [3])
-perm_tensor = [1.0, 0.0, 0.0,
-               0.0, 1.0, 0.0,
-               0.0, 0.0, 1.0]
-
-entities = mb.get_entities_by_dimension(root_set, 2)
-for ent in entities:
-    full_edges = mb.get_adjacencies(ent, 1, True)
-    full_edge_meshset = mb.create_meshset()
-    mb.add_entities(full_edge_meshset, full_edges)
-    mb.tag_set_data(full_edges_tag, ent, full_edge_meshset)
-    mb.tag_set_data(perm_tag, ent, perm_tensor)
-
 #all_verts = mb.get_entities_by_dimension(root_set, 0)
 #mtu.construct_aentities(all_verts)
 
@@ -197,40 +91,40 @@ def mid_point(p1, p2):
     mid_p = (coords_p1 + coords_p2)/2.0
     return mid_p
 
-def get_centroid(entity):
-
-    # verts = mb.get_adjacencies(entity, 0)
-    # coords = mb.get_coords(verts).reshape(len(verts), 3)
-    # # print("Coords test: ", coords)
-    # centroide = sum(coords)/(len(verts))
-    verts = mb.get_adjacencies(entity, 0)
-    coords = np.array([mb.get_coords([vert]) for vert in verts])
-    pseudo_cent = get_centroid_reg(entity)
-    vectors = np.array([coord - pseudo_cent for coord in coords])
-    vectors = vectors.flatten()
-    vectors = np.reshape(vectors, (len(verts), 3))
-    directions = np.zeros(len(vectors))
-    for j in range(len(vectors)):
-        direction = ang_vectors(vectors[j], [1,0,0])
-        if vectors[j, 1] <= 0:
-            directions[j] = directions[j] + 2.0*pi - direction
-        else:
-            directions[j] = directions[j] + direction
-    indices = np.argsort(directions)
-    vect_std = vectors[indices]
-    total_area = 0
-    wgtd_cent = 0
-    for i in range(len(vect_std)):
-        norma1 = norma(vect_std[i])
-        norma2 = norma(vect_std[i-1])
-        ang_vect = ang_vectors(vect_std[i], vect_std[i-1])
-        area_tri = (0.5)*norma1*norma2*np.sin(ang_vect)
-        cent_tri = pseudo_cent + (1/3.0)*(vect_std[i] + vect_std[i-1])
-        wgtd_cent = wgtd_cent + area_tri*cent_tri
-        total_area = total_area + area_tri
-
-    centroide = wgtd_cent/total_area
-    return centroide
+# def get_centroid(entity):
+#
+#     # verts = mb.get_adjacencies(entity, 0)
+#     # coords = mb.get_coords(verts).reshape(len(verts), 3)
+#     # # print("Coords test: ", coords)
+#     # centroide = sum(coords)/(len(verts))
+#     verts = mb.get_adjacencies(entity, 0)
+#     coords = np.array([mb.get_coords([vert]) for vert in verts])
+#     pseudo_cent = get_centroid_reg(entity)
+#     vectors = np.array([coord - pseudo_cent for coord in coords])
+#     vectors = vectors.flatten()
+#     vectors = np.reshape(vectors, (len(verts), 3))
+#     directions = np.zeros(len(vectors))
+#     for j in range(len(vectors)):
+#         direction = ang_vectors(vectors[j], [1,0,0])
+#         if vectors[j, 1] <= 0:
+#             directions[j] = directions[j] + 2.0*pi - direction
+#         else:
+#             directions[j] = directions[j] + direction
+#     indices = np.argsort(directions)
+#     vect_std = vectors[indices]
+#     total_area = 0
+#     wgtd_cent = 0
+#     for i in range(len(vect_std)):
+#         norma1 = norma(vect_std[i])
+#         norma2 = norma(vect_std[i-1])
+#         ang_vect = ang_vectors(vect_std[i], vect_std[i-1])
+#         area_tri = (0.5)*norma1*norma2*np.sin(ang_vect)
+#         cent_tri = pseudo_cent + (1/3.0)*(vect_std[i] + vect_std[i-1])
+#         wgtd_cent = wgtd_cent + area_tri*cent_tri
+#         total_area = total_area + area_tri
+#
+#     centroide = wgtd_cent/total_area
+#     return centroide
 
 
 def K_n_X(node_face_coords, entity_centroid, perm):
@@ -267,7 +161,7 @@ def h_X(node_face_coords, entity_centroid, perm):
     return h
 
 
-def face_weight(interp_node, face):
+def face_weight(mb, mtu, get_centroid, interp_node, face, perm_tag):
     coords_interp_node = mb.get_coords([interp_node])
     adjacent_volumes = mb.get_adjacencies(face, 2)
     half_face = mtu.get_average_position([face])
@@ -311,7 +205,7 @@ def face_weight(interp_node, face):
 
 
 
-def partial_weight(interp_node, adjacent_volume):
+def partial_weight(mb, mtu, get_centroid, interp_node, adjacent_volume, perm_tag):
     coords_interp_node = mb.get_coords([interp_node])
     perm_adjacent_volume = mb.tag_get_data(perm_tag, adjacent_volume).reshape([3, 3])
     centroid_adjacent_volume = get_centroid(adjacent_volume)
@@ -345,15 +239,15 @@ def partial_weight(interp_node, adjacent_volume):
     neta_first = half_modsqrd_first_face / h_first
     neta_second = half_modsqrd_second_face / h_second
     # print("netas: ", neta_first, neta_second, h_first, h_second, coords_interp_node, centroid_adjacent_volume)
-    csi_first = face_weight(interp_node, first_face)
-    csi_second = face_weight(interp_node, second_face)
+    csi_first = face_weight(mb, mtu, get_centroid, interp_node, first_face, perm_tag)
+    csi_second = face_weight(mb, mtu, get_centroid, interp_node, second_face, perm_tag)
 
     node_weight = K_ni_first * neta_first * csi_first + K_ni_second * neta_second * csi_second
     # print("weight: ", node_weight, coords_interp_node, centroid_adjacent_volume)
     return node_weight
 
 
-def neumann_boundary_weight(neumann_node, neumann_tag):
+def neumann_boundary_weight(mb, mtu, get_centroid, neumann_node, neumann_tag, perm_tag):
     adjacent_faces = mtu.get_bridge_adjacencies(neumann_node, 0, 1)
     #print len(face_adj)
     coords_neumann_node = mb.get_coords([neumann_node])
@@ -369,7 +263,7 @@ def neumann_boundary_weight(neumann_node, neumann_tag):
             #print other_node, coords_other_node, len(face_adj)
             half_face = mtu.get_average_position([face])
 
-            csi_neu = face_weight(neumann_node, face)
+            csi_neu = face_weight(mb, mtu, get_centroid, neumann_node, face, perm_tag)
             #print csi_neu, half_face, coords_neumann_node
             #print csi_neu, coords_neumann_node, coords_other_node, half_face, len(face_adj)
             module_half_face = norma(half_face - coords_neumann_node)
@@ -382,34 +276,47 @@ def neumann_boundary_weight(neumann_node, neumann_tag):
 
 
 
-def explicit_weights(interp_node):
+def explicit_weights(mb, mtu, get_centroid, interp_node, perm_tag):
     adjacent_volumes = mtu.get_bridge_adjacencies(interp_node, 0, 2)
     weight_sum = 0
     weights = []
     for adjacent_volume in adjacent_volumes:
-        weight = partial_weight(interp_node, adjacent_volume)
+        weight = partial_weight(mb, mtu, get_centroid, interp_node, adjacent_volume, perm_tag)
         weights.append(weight)
         weight_sum += weight
         # print("volumes: ", mb.get_coords([interp_node]), get_centroid(adjacent_volume))
     weights = weights / weight_sum
     # print("weights: ", weights, )
     volumes_weights = [[vol, weigh] for vol, weigh in zip(adjacent_volumes, weights)]
-    print("pesos: ", mb.get_coords([interp_node]), volumes_weights)
+    # print("pesos: ", mb.get_coords([interp_node]), volumes_weights)
     return volumes_weights
 
-def well_influence(coord_x, coord_y, coord_z, radius, source_term):
-    all_volumes = mb.get_entities_by_dimension(root_set, 2)
-    for a_volume in all_volumes:
-        volume_centroid = get_centroid(a_volume)
 
-    pass
+def MPFA_D(mesh_instance):
 
+    m_inst = mesh_instance
+    mb = m_inst.mb
+    mtu = m_inst.mtu
 
-def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
+    perm_tag = m_inst.perm_tag
+    neumann_tag = m_inst.neumann_tag
+    dirichlet_tag = m_inst.dirichlet_tag
+    pressure_tag = m_inst.pressure_tag
+
+    get_centroid = m_inst.get_centroid
+
+    dirichlet_nodes = m_inst.get_dirichlet_nodes()
+    neumann_nodes = m_inst.get_neumann_nodes() - dirichlet_nodes
+
+    all_nodes = set(mb.get_entities_by_dimension(m_inst.root_set, 0))
+
+    intern_nodes = all_nodes - dirichlet_nodes - neumann_nodes
+    # intern_nodes = intern_nodes - neumann_nodes
+    # print("After: ", dirichlet_nodes, neumann_nodes, intern_nodes)
     nodes_weights = {}
     ncount = 0
     for intern_node in intern_nodes:
-        intern_node_weight = explicit_weights(intern_node)
+        intern_node_weight = explicit_weights(mb, mtu, get_centroid, intern_node, perm_tag)
         nodes_weights[intern_node] = intern_node_weight
         print("No ", ncount, " de", len(intern_nodes))
         ncount = ncount + 1
@@ -420,9 +327,9 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
     print("-------------------------------------------------------------------")
 
     for neumann_node in neumann_nodes:
-        neumann_node_weight = explicit_weights(neumann_node)
+        neumann_node_weight = explicit_weights(mb, mtu, get_centroid, neumann_node, perm_tag)
         neumann_nodes_weights[neumann_node] = neumann_node_weight
-        print("neu_node:  ", mb.get_coords([neumann_node]))
+        print("Neumann node:  ", mb.get_coords([neumann_node]))
     print("-------------------------------------------------------------------")
     print("Calculou pesos de nos em contorno de neumann!")
     print("-------------------------------------------------------------------")
@@ -433,7 +340,7 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
         print("v_ids: ", v_ids[ent], get_centroid(ent))
     A = np.zeros([len(two_d_entities), len(two_d_entities)])
     B = np.zeros([len(two_d_entities), 1])
-    all_faces = mb.get_entities_by_dimension(root_set, 1)
+    all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
     for face in all_faces:
         adjacent_entitites = np.asarray(mb.get_adjacencies(face, 2), dtype='uint64')
@@ -554,9 +461,9 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
                 adjacent_blocks = mtu.get_bridge_adjacencies(face_nodes[0], 0, 2)
                 block_weight_sum = 0
                 for a_block in adjacent_blocks:
-                    block_weight = partial_weight(face_nodes[0], a_block)
+                    block_weight = partial_weight(mb, mtu, get_centroid, face_nodes[0], a_block, perm_tag)
                     block_weight_sum += block_weight
-                neumann_node_factor = neumann_boundary_weight(face_nodes[0], neumann_tag) / block_weight_sum
+                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[0], neumann_tag, perm_tag) / block_weight_sum
 
                 B[v_ids[first_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
@@ -579,9 +486,9 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
                 adjacent_blocks = mtu.get_bridge_adjacencies(face_nodes[1], 0, 2)
                 block_weight_sum = 0
                 for a_block in adjacent_blocks:
-                    block_weight = partial_weight(face_nodes[1], a_block)
+                    block_weight = partial_weight(mb, mtu, get_centroid, face_nodes[1], a_block, perm_tag)
                     block_weight_sum += block_weight
-                neumann_node_factor = neumann_boundary_weight(face_nodes[1], neumann_tag) / block_weight_sum
+                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[1], neumann_tag, perm_tag) / block_weight_sum
                 B[v_ids[first_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 for vol, weigh in neumann_nodes_weights[face_nodes[1]]:
@@ -597,55 +504,55 @@ def MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes):
     inv_A = np.linalg.inv(A)
     print("Inv: ", inv_A)
     volume_pressures = np.dot(inv_A, B)
-    print(volume_pressures)
+    # print(volume_pressures)
     mb.tag_set_data(pressure_tag, two_d_entities, volume_pressures.flatten())
     mb.write_file("out_file.vtk")
     return volume_pressures
 
-def node_pressure(node, pressure_tag, K):
-    pass
-    #root_set= mb.get_root_set()
-    try:
-        node_press = mb.tag_get_data(dirichlet_tag, node)
+# def node_pressure(node, pressure_tag, K):
+#     pass
+#     #root_set= mb.get_root_set()
+#     try:
+#         node_press = mb.tag_get_data(dirichlet_tag, node)
+#
+#     except RuntimeError:
+#
+#         entities_NP = mb.get_entities_by_dimension(root_set, 2)
+#         around_blocks = mb.get_adjacencies(node, 2)
+#         sum_psi = 0.0
+#         wgtd_press = 0.0
+#         for a_block in around_blocks:
+#             block_press = mb.tag_get_data(pressure_tag, a_block)
+#             psi = psi_LPEW2(node, a_block, K)
+#             wgtd_press = wgtd_press + psi*block_press
+#             sum_psi = sum_psi + psi
+#
+#         node_press = wgtd_press/sum_psi
+#
+#         try:
+#             neumann_flow = mb.tag_get_data(neumann_tag, node)
+#             neu_add = Neumann_treat_Bk(node, neumann_tag, K)
+#             node_press = node_press - neu_add/sum_psi
+#         except RuntimeError:
+#             pass
+#
+#     return node_press
 
-    except RuntimeError:
-
-        entities_NP = mb.get_entities_by_dimension(root_set, 2)
-        around_blocks = mb.get_adjacencies(node, 2)
-        sum_psi = 0.0
-        wgtd_press = 0.0
-        for a_block in around_blocks:
-            block_press = mb.tag_get_data(pressure_tag, a_block)
-            psi = psi_LPEW2(node, a_block, K)
-            wgtd_press = wgtd_press + psi*block_press
-            sum_psi = sum_psi + psi
-
-        node_press = wgtd_press/sum_psi
-
-        try:
-            neumann_flow = mb.tag_get_data(neumann_tag, node)
-            neu_add = Neumann_treat_Bk(node, neumann_tag, K)
-            node_press = node_press - neu_add/sum_psi
-        except RuntimeError:
-            pass
-
-    return node_press
-
-pressures = MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes)
-print("PRESSURES:", pressures)
-all_verts = mb.get_entities_by_dimension(root_set, 0)
-for vert in all_verts:
-    coords = mb.get_coords([vert])
-    print("Verts coords: ", coords)
-
-all_volumes = mb.get_entities_by_dimension(root_set, 2)
-for i in range(len(all_volumes)):
-    coord_x = get_centroid(all_volumes[i])[0]
-    # print("test: ", 1.0 - coord_x == pressures[i])
-    print("Val: ", 1.0 - coord_x, pressures[i], (
-            1.0 - coord_x) - pressures[i])#, get_centroid(all_volumes[i]))
-
-print("-------------------------------------")
-print("Campo de pressoes calculado!")
-print("-------------------------------------")
-print(pressures)
+# pressures = MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes)
+# print("PRESSURES:", pressures)
+# all_verts = mb.get_entities_by_dimension(root_set, 0)
+# for vert in all_verts:
+#     coords = mb.get_coords([vert])
+#     print("Verts coords: ", coords)
+#
+# all_volumes = mb.get_entities_by_dimension(root_set, 2)
+# for i in range(len(all_volumes)):
+#     coord_x = get_centroid(all_volumes[i])[0]
+#     # print("test: ", 1.0 - coord_x == pressures[i])
+#     print("Val: ", 1.0 - coord_x, pressures[i], (
+#             1.0 - coord_x) - pressures[i])#, get_centroid(all_volumes[i]))
+#
+# print("-------------------------------------")
+# print("Campo de pressoes calculado!")
+# print("-------------------------------------")
+# print(pressures)

@@ -27,14 +27,3 @@ for i in range(len(all_volumes)):
     # print("test: ", 1.0 - coord_x == pressures[i])
     print("Val: ", 1.0 - coord_x, pressure_field[i], (
             1.0 - coord_x) - pressure_field[i])#, get_centroid(all_volumes[i]))
-
-
-
-#
-# entities = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 2)
-#
-# for ent in entities:
-#     print("Centroides: ")
-#     print(mesh_data.get_centroid(ent))
-
-mesh_data.mb.write_file("testing_preprocessor.vtk")

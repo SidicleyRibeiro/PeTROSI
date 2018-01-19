@@ -1,94 +1,89 @@
 import numpy as np
 from math import sqrt
 from math import pi
-
-class Preprocessor():
-
-
-    from pymoab import core
-    from pymoab import types
-    from pymoab import topo_util
+from pymoab import core
+from pymoab import types
+from pymoab import topo_util
 
 
-    mb = core.Core()
-    root_set = mb.get_root_set()
-    # types = pymoab.types
-    mtu = topo_util.MeshTopoUtil(mb)
-
-    pressure_tag = mb.tag_get_handle(
-        "pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    dirichlet_tag = mb.tag_get_handle(
-        "dirichlet", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    neumann_tag = mb.tag_get_handle(
-        "neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    perm_tag = mb.tag_get_handle(
-        "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    error_tag = mb.tag_get_handle(
-        "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    node_pressure_tag = mb.tag_get_handle(
-        "node_pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    ref_degree_tag = mb.tag_get_handle(
-        "ref_degree", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
-    hanging_nodes_tag = mb.tag_get_handle(
-        "hanging_nodes", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
-
-    full_edges_tag = mb.tag_get_handle(
-        "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
+class Preprocessor:
 
 
-    all_b_conditions = []
+    def __init__(self, mesh_file, b_conditions):
 
+        self.mb = core.Core()
+        self.root_set = self.mb.get_root_set()
+        self.mtu = topo_util.MeshTopoUtil(self.mb)
 
-    def __init__(self, mesh_file, b_condition):
-        self.__class__.mb.load_file(mesh_file)
-        self.b_conditions = b_condition
-        self.__class__.all_b_conditions.append(b_condition)
+        self.mb.load_file(mesh_file)
+        self.b_conditions = b_conditions
 
-    # def material_set_init(self):
-        self.physical_tag = self.__class__.mb.tag_get_handle("MATERIAL_SET")
-        self.physical_sets = self.__class__.mb.get_entities_by_type_and_tag(
-            0, self.__class__.types.MBENTITYSET, np.array(
+        self.physical_tag = self.mb.tag_get_handle("MATERIAL_SET")
+        self.physical_sets = self.mb.get_entities_by_type_and_tag(
+            0, types.MBENTITYSET, np.array(
             (self.physical_tag,)), np.array((None,)))
+
+        self.pressure_tag = self.mb.tag_get_handle(
+            "pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.dirichlet_tag = self.mb.tag_get_handle(
+            "dirichlet", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.neumann_tag = self.mb.tag_get_handle(
+            "neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.perm_tag = self.mb.tag_get_handle(
+            "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.error_tag = self.mb.tag_get_handle(
+            "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.node_pressure_tag = self.mb.tag_get_handle(
+            "node_pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.ref_degree_tag = self.mb.tag_get_handle(
+            "ref_degree", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.hanging_nodes_tag = self.mb.tag_get_handle(
+            "hanging_nodes", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
+
+        self.full_edges_tag = self.mb.tag_get_handle(
+            "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
 
     def bound_condition_values(self, b_condition_type):
         ids_values = self.b_conditions[b_condition_type]
         ids = list(ids_values.keys())
 
-        self.dirich_nodes = set()
-        self.neu_nodes = set()
+        if b_condition_type == "dirichlet":
+            self.dirich_nodes = set()
+
+        if b_condition_type == "neumann":
+            self.neu_nodes = set()
+
         for id_ in ids:
             for tag in self.physical_sets:
-                tag_id = self.__class__.mb.tag_get_data(
+                tag_id = self.mb.tag_get_data(
                         self.physical_tag, np.array([tag]), flat=True)
-                entity_set = self.__class__.mb.get_entities_by_handle(tag, True)
+                entity_set = self.mb.get_entities_by_handle(tag, True)
 
                 if tag_id == id_:
                     for ent in entity_set:
-                        nodes = self.__class__.mtu.get_bridge_adjacencies(ent, 0, 0)
+                        nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
 
                         if b_condition_type == "dirichlet":
 
                             self.dirich_nodes = self.dirich_nodes | set(nodes)
 
-                            self.__class__.mb.tag_set_data(self.__class__.dirichlet_tag, ent, [ids_values[id_]])
-                            self.__class__.mb.tag_set_data(
-                                    self.__class__.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                            self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
+                            self.mb.tag_set_data(
+                                    self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
                         if b_condition_type == "neumann":
-
                             self.neu_nodes = self.neu_nodes | set(nodes)
-
-                            self.__class__.mb.tag_set_data(self.__class__.neumann_tag, ent, [ids_values[id_]])
-                            self.__class__.mb.tag_set_data(
-                                    self.__class__.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                            self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
+                            self.mb.tag_set_data(
+                                    self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
 
     def get_dirichlet_nodes(self):
@@ -129,12 +124,8 @@ class Preprocessor():
 
     def get_centroid(self, entity):
 
-        # verts = mb.get_adjacencies(entity, 0)
-        # coords = mb.get_coords(verts).reshape(len(verts), 3)
-        # # print("Coords test: ", coords)
-        # centroide = sum(coords)/(len(verts))
-        verts = self.__class__.mb.get_adjacencies(entity, 0)
-        coords = np.array([self.__class__.mb.get_coords([vert]) for vert in verts])
+        verts = self.mb.get_adjacencies(entity, 0)
+        coords = np.array([self.mb.get_coords([vert]) for vert in verts])
 
         qtd_pts = len(verts)
         #print qtd_pts, 'qtd_pts'
@@ -175,15 +166,13 @@ class Preprocessor():
                         0.0, 0.0, 1.0]
         return perm_tensor
 
+
     def all_hanging_nodes_full_edges(self):
-        entities = self.__class__.mb.get_entities_by_dimension(self.__class__.root_set, 2)
+        entities = self.mb.get_entities_by_dimension(self.root_set, 2)
         for ent in entities:
 
-            full_edges = self.__class__.mb.get_adjacencies(ent, 1, True)
-            full_edge_meshset = self.__class__.mb.create_meshset()
-            self.__class__.mb.add_entities(full_edge_meshset, full_edges)
-            self.__class__.mb.tag_set_data(self.__class__.full_edges_tag, ent, full_edge_meshset)
-            self.__class__.mb.tag_set_data(self.__class__.perm_tag, ent, self.permeability(self.get_centroid(ent)))
-
-    # def mesh_instance(self):
-    #     return self.__class__.self
+            full_edges = self.mb.get_adjacencies(ent, 1, True)
+            full_edge_meshset = self.mb.create_meshset()
+            self.mb.add_entities(full_edge_meshset, full_edges)
+            self.mb.tag_set_data(self.full_edges_tag, ent, full_edge_meshset)
+            self.mb.tag_set_data(self.perm_tag, ent, self.permeability(self.get_centroid(ent)))
