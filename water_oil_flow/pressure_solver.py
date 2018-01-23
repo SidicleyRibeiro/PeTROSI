@@ -1,33 +1,9 @@
 # coding: utf-8
 
-# In[114]:
-
-from pymoab import core
-from pymoab import topo_util
-from pymoab import types
-from pymoab.rng import Range
 from math import pi
 from math import sqrt
-from math import log10
-from math import trunc
-from math import floor
-from math import ceil
 import numpy as np
-import sys
-import random
 
-#all_verts = mb.get_entities_by_dimension(root_set, 0)
-#mtu.construct_aentities(all_verts)
-
-def get_centroid_reg(entity):
-    points = mb.get_adjacencies(entity, 0)
-    coords = mb.get_coords(points)
-    qtd_pts = len(points)
-    #print qtd_pts, 'qtd_pts'
-    coords = np.reshape(coords, (qtd_pts, 3))
-    centroid = sum(coords)/qtd_pts
-
-    return centroid
 
 def norma(vector):
     vector = np.array(vector)
@@ -90,41 +66,6 @@ def mid_point(p1, p2):
     coords_p2 = mb.get_coords(p2)
     mid_p = (coords_p1 + coords_p2)/2.0
     return mid_p
-
-# def get_centroid(entity):
-#
-#     # verts = mb.get_adjacencies(entity, 0)
-#     # coords = mb.get_coords(verts).reshape(len(verts), 3)
-#     # # print("Coords test: ", coords)
-#     # centroide = sum(coords)/(len(verts))
-#     verts = mb.get_adjacencies(entity, 0)
-#     coords = np.array([mb.get_coords([vert]) for vert in verts])
-#     pseudo_cent = get_centroid_reg(entity)
-#     vectors = np.array([coord - pseudo_cent for coord in coords])
-#     vectors = vectors.flatten()
-#     vectors = np.reshape(vectors, (len(verts), 3))
-#     directions = np.zeros(len(vectors))
-#     for j in range(len(vectors)):
-#         direction = ang_vectors(vectors[j], [1,0,0])
-#         if vectors[j, 1] <= 0:
-#             directions[j] = directions[j] + 2.0*pi - direction
-#         else:
-#             directions[j] = directions[j] + direction
-#     indices = np.argsort(directions)
-#     vect_std = vectors[indices]
-#     total_area = 0
-#     wgtd_cent = 0
-#     for i in range(len(vect_std)):
-#         norma1 = norma(vect_std[i])
-#         norma2 = norma(vect_std[i-1])
-#         ang_vect = ang_vectors(vect_std[i], vect_std[i-1])
-#         area_tri = (0.5)*norma1*norma2*np.sin(ang_vect)
-#         cent_tri = pseudo_cent + (1/3.0)*(vect_std[i] + vect_std[i-1])
-#         wgtd_cent = wgtd_cent + area_tri*cent_tri
-#         total_area = total_area + area_tri
-#
-#     centroide = wgtd_cent/total_area
-#     return centroide
 
 
 def K_n_X(node_face_coords, entity_centroid, perm):
@@ -268,7 +209,7 @@ def neumann_boundary_weight(mb, mtu, get_centroid, neumann_node, neumann_tag, pe
             #print csi_neu, coords_neumann_node, coords_other_node, half_face, len(face_adj)
             module_half_face = norma(half_face - coords_neumann_node)
             neumann_term += (1 + csi_neu) * module_half_face * neu_flow_rate
-            print("Teste neumann: ", half_face, neu_flow_rate)
+            # print("Teste neumann: ", half_face, neu_flow_rate)
         except RuntimeError:
             continue
     # print("Neumann term: ", neumann_term)
@@ -309,6 +250,8 @@ def MPFA_D(mesh_instance):
     neumann_nodes = m_inst.get_neumann_nodes() - dirichlet_nodes
 
     all_nodes = set(mb.get_entities_by_dimension(m_inst.root_set, 0))
+    all_volumes = m_inst.all_volumes
+
 
     intern_nodes = all_nodes - dirichlet_nodes - neumann_nodes
     # intern_nodes = intern_nodes - neumann_nodes
@@ -333,13 +276,13 @@ def MPFA_D(mesh_instance):
     print("-------------------------------------------------------------------")
     print("Calculou pesos de nos em contorno de neumann!")
     print("-------------------------------------------------------------------")
-    two_d_entities = mb.get_entities_by_dimension(0, 2)
-    v_ids = dict(zip(two_d_entities, np.arange(0, len(two_d_entities))))
 
-    for ent in two_d_entities:
+    v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
+
+    for ent in all_volumes:
         print("v_ids: ", v_ids[ent], get_centroid(ent))
-    A = np.zeros([len(two_d_entities), len(two_d_entities)])
-    B = np.zeros([len(two_d_entities), 1])
+    A = np.zeros([len(all_volumes), len(all_volumes)])
+    B = np.zeros([len(all_volumes), 1])
     all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
     for face in all_faces:
@@ -505,38 +448,69 @@ def MPFA_D(mesh_instance):
     print("Inv: ", inv_A)
     volume_pressures = np.dot(inv_A, B)
     # print(volume_pressures)
-    mb.tag_set_data(pressure_tag, two_d_entities, volume_pressures.flatten())
-    mb.write_file("out_file.vtk")
+    mb.tag_set_data(pressure_tag, all_volumes, volume_pressures.flatten())
+    mb.write_file("pressure_field.vtk")
     return volume_pressures
 
-# def node_pressure(node, pressure_tag, K):
-#     pass
-#     #root_set= mb.get_root_set()
-#     try:
-#         node_press = mb.tag_get_data(dirichlet_tag, node)
-#
-#     except RuntimeError:
-#
-#         entities_NP = mb.get_entities_by_dimension(root_set, 2)
-#         around_blocks = mb.get_adjacencies(node, 2)
-#         sum_psi = 0.0
-#         wgtd_press = 0.0
-#         for a_block in around_blocks:
-#             block_press = mb.tag_get_data(pressure_tag, a_block)
-#             psi = psi_LPEW2(node, a_block, K)
-#             wgtd_press = wgtd_press + psi*block_press
-#             sum_psi = sum_psi + psi
-#
-#         node_press = wgtd_press/sum_psi
-#
-#         try:
-#             neumann_flow = mb.tag_get_data(neumann_tag, node)
-#             neu_add = Neumann_treat_Bk(node, neumann_tag, K)
-#             node_press = node_press - neu_add/sum_psi
-#         except RuntimeError:
-#             pass
-#
-#     return node_press
+
+def node_pressure(mesh_instance):
+    pass
+    #root_set= mb.get_root_set()
+    try:
+        node_press = mb.tag_get_data(dirichlet_tag, node)
+
+    except RuntimeError:
+
+        entities_NP = mb.get_entities_by_dimension(root_set, 2)
+        around_blocks = mb.get_adjacencies(node, 2)
+        sum_psi = 0.0
+        wgtd_press = 0.0
+        for a_block in around_blocks:
+            block_press = mb.tag_get_data(pressure_tag, a_block)
+            psi = psi_LPEW2(node, a_block, K)
+            wgtd_press = wgtd_press + psi*block_press
+            sum_psi = sum_psi + psi
+
+        node_press = wgtd_press/sum_psi
+
+        try:
+            neumann_flow = mb.tag_get_data(neumann_tag, node)
+            neu_add = Neumann_treat_Bk(node, neumann_tag, K)
+            node_press = node_press - neu_add/sum_psi
+        except RuntimeError:
+            pass
+
+    return node_press
+
+
+
+def grad_trian(entity, p1, p2, K):
+    coord_p1 = mb.get_coords([p1])
+    coord_p2 = mb.get_coords([p2])
+    coord_cent = get_centroid(entity)
+    #print coord_p1, coord_p2, coord_cent
+    area_tri = area(coord_p1, coord_p2, coord_cent)
+
+    press_1 = node_pressure(p1, pressure_tag, K).flatten()
+    press_2 = node_pressure(p2, pressure_tag, K).flatten()
+    press_cent = mb.tag_get_data(pressure_tag, entity).flatten()
+    #print press_1, press_2, press_cent
+    normal_op_p1 = norm_vec(coord_p2, coord_cent, coord_p1)
+    normal_op_p2 = norm_vec(coord_p1, coord_cent, coord_p2)
+    normal_op_cent = norm_vec(coord_p1, coord_p2, coord_cent)
+
+    grad_tri = (-1/(2*area_tri))*(
+        press_1*normal_op_p1 +
+        press_2*normal_op_p2 +
+        press_cent*normal_op_cent)
+    #print press_1, press_2, area_tri
+    #print grad_tri, coord_cent
+    return grad_tri
+
+
+
+
+
 
 # pressures = MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes)
 # print("PRESSURES:", pressures)
@@ -545,7 +519,6 @@ def MPFA_D(mesh_instance):
 #     coords = mb.get_coords([vert])
 #     print("Verts coords: ", coords)
 #
-# all_volumes = mb.get_entities_by_dimension(root_set, 2)
 # for i in range(len(all_volumes)):
 #     coord_x = get_centroid(all_volumes[i])[0]
 #     # print("test: ", 1.0 - coord_x == pressures[i])

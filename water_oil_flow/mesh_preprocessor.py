@@ -6,7 +6,7 @@ from pymoab import types
 from pymoab import topo_util
 
 
-class Preprocessor:
+class Mesh_Manager:
 
 
     def __init__(self, mesh_file, b_conditions):
@@ -49,6 +49,24 @@ class Preprocessor:
 
         self.full_edges_tag = self.mb.tag_get_handle(
             "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
+
+        self.all_volumes = self.mb.get_entities_by_dimension(self.root_set, 2)
+
+        self.all_nodes = self.mb.get_entities_by_dimension(self.root_set, 0)
+
+
+    def create_vertices(self, coords):
+        new_vertices = self.mb.create_vertices(coords)
+        self.all_nodes.append(new_vertices)
+        return new_vertices
+
+
+
+    def create_element(self, poly_type, vertices):
+        new_volume = self.mb.create_element(poly_type, vertices)
+        self.all_volumes.append(new_element)
+        return new_volume
+
 
 
     def bound_condition_values(self, b_condition_type):
@@ -168,8 +186,8 @@ class Preprocessor:
 
 
     def all_hanging_nodes_full_edges(self):
-        entities = self.mb.get_entities_by_dimension(self.root_set, 2)
-        for ent in entities:
+
+        for ent in self.all_volumes:
 
             full_edges = self.mb.get_adjacencies(ent, 1, True)
             full_edge_meshset = self.mb.create_meshset()
