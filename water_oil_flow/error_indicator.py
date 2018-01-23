@@ -1,20 +1,19 @@
 
 
 
-def error_indicator(error_tag, K):
+def error_indicator(mesh_data):
     #root_set = mb.get_root_set()
-    entities_EI = mb.get_entities_by_dimension(root_set, 2)
     ent_norm_error = np.array([])
-    for ent in entities_EI:
-        ent_press = mb.tag_get_data(pressure_tag, ent)
-        coord_cent = get_centroid(ent)
-        edges = mb.get_adjacencies(ent, 1, True)
+    for vol in mesh_data.all_volumes:
+        ent_press = mb.tag_get_data(pressure_tag, vol)
+        coord_cent = get_centroid(vol)
+        edges = mb.get_adjacencies(vol, 1, True)
         grad_vectors = np.array([])
         tri_cent = np.array([])
 
         for ed in edges:
             nodes = mb.get_adjacencies(ed, 0)
-            grad_vec = grad_trian(ent, nodes[0], nodes[1], K)
+            grad_vec = grad_trian(vol, nodes[0], nodes[1], K)
 
             grad_vec = grad_vec.flatten()
             grad_vectors = np.append(grad_vectors, grad_vec)
@@ -47,7 +46,7 @@ def error_indicator(error_tag, K):
         norm_error = sqrt(avg_error_L)
         #print avg_error_L, norm_error
         ent_norm_error = np.append(ent_norm_error, norm_error)
-        mb.tag_set_data(error_tag, ent, norm_error)
+        mb.tag_set_data(error_tag, vol, norm_error)
     #print 'errors', ent_norm_error
     global_error = sqrt(np.dot(ent_norm_error, ent_norm_error)/len(ent_norm_error))
     #mb.write_file('pressure_error_field.vtk')

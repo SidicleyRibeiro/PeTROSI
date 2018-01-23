@@ -61,12 +61,10 @@ class Mesh_Manager:
         return new_vertices
 
 
-
     def create_element(self, poly_type, vertices):
         new_volume = self.mb.create_element(poly_type, vertices)
         self.all_volumes.append(new_element)
         return new_volume
-
 
 
     def bound_condition_values(self, b_condition_type):
@@ -102,14 +100,6 @@ class Mesh_Manager:
                             self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
                             self.mb.tag_set_data(
                                     self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
-
-
-    def get_dirichlet_nodes(self):
-        return self.dirich_nodes
-
-
-    def get_neumann_nodes(self):
-        return self.neu_nodes
 
 
     def well_condition(self, coords, radius):

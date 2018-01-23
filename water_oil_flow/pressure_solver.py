@@ -212,6 +212,13 @@ def neumann_boundary_weight(mb, mtu, get_centroid, neumann_node, neumann_tag, pe
             # print("Teste neumann: ", half_face, neu_flow_rate)
         except RuntimeError:
             continue
+
+    adjacent_blocks = mtu.get_bridge_adjacencies(neumann_node, 0, 2)
+    block_weight_sum = 0
+    for a_block in adjacent_blocks:
+        block_weight = partial_weight(mb, mtu, get_centroid, neumann_node, a_block, perm_tag)
+        block_weight_sum += block_weight
+    neumann_term = neumann_term / block_weight_sum
     # print("Neumann term: ", neumann_term)
     return neumann_term
 
@@ -246,8 +253,8 @@ def MPFA_D(mesh_instance):
 
     get_centroid = m_inst.get_centroid
 
-    dirichlet_nodes = m_inst.get_dirichlet_nodes()
-    neumann_nodes = m_inst.get_neumann_nodes() - dirichlet_nodes
+    dirichlet_nodes = m_inst.dirich_nodes
+    neumann_nodes = m_inst.neu_nodes - dirichlet_nodes
 
     all_nodes = set(mb.get_entities_by_dimension(m_inst.root_set, 0))
     all_volumes = m_inst.all_volumes
@@ -401,13 +408,7 @@ def MPFA_D(mesh_instance):
                 B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * pressure_first_node[0][0]
 
             elif face_nodes[0] in neumann_nodes:
-                adjacent_blocks = mtu.get_bridge_adjacencies(face_nodes[0], 0, 2)
-                block_weight_sum = 0
-                for a_block in adjacent_blocks:
-                    block_weight = partial_weight(mb, mtu, get_centroid, face_nodes[0], a_block, perm_tag)
-                    block_weight_sum += block_weight
-                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[0], neumann_tag, perm_tag) / block_weight_sum
-
+                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[0], neumann_tag, perm_tag)
                 B[v_ids[first_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 for vol, weigh in neumann_nodes_weights[face_nodes[0]]:
@@ -426,12 +427,7 @@ def MPFA_D(mesh_instance):
                 B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * pressure_second_node[0][0]
 
             elif face_nodes[1] in neumann_nodes:
-                adjacent_blocks = mtu.get_bridge_adjacencies(face_nodes[1], 0, 2)
-                block_weight_sum = 0
-                for a_block in adjacent_blocks:
-                    block_weight = partial_weight(mb, mtu, get_centroid, face_nodes[1], a_block, perm_tag)
-                    block_weight_sum += block_weight
-                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[1], neumann_tag, perm_tag) / block_weight_sum
+                neumann_node_factor = neumann_boundary_weight(mb, mtu, get_centroid, face_nodes[1], neumann_tag, perm_tag)
                 B[v_ids[first_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                 for vol, weigh in neumann_nodes_weights[face_nodes[1]]:
@@ -444,47 +440,60 @@ def MPFA_D(mesh_instance):
 
     print(A)
     print(B)
-    inv_A = np.linalg.inv(A)
-    print("Inv: ", inv_A)
-    volume_pressures = np.dot(inv_A, B)
+    volume_pressures = np.linalg.solve(A, B)
     # print(volume_pressures)
     mb.tag_set_data(pressure_tag, all_volumes, volume_pressures.flatten())
     mb.write_file("pressure_field.vtk")
     return volume_pressures
 
 
-def node_pressure(mesh_instance):
-    pass
-    #root_set= mb.get_root_set()
-    try:
-        node_press = mb.tag_get_data(dirichlet_tag, node)
+def get_nodes_pressures(mesh_data):
 
-    except RuntimeError:
+    nodes_pressures = {}
+    for node in mesh_data.all_nodes:
 
-        entities_NP = mb.get_entities_by_dimension(root_set, 2)
-        around_blocks = mb.get_adjacencies(node, 2)
-        sum_psi = 0.0
-        wgtd_press = 0.0
-        for a_block in around_blocks:
-            block_press = mb.tag_get_data(pressure_tag, a_block)
-            psi = psi_LPEW2(node, a_block, K)
-            wgtd_press = wgtd_press + psi*block_press
-            sum_psi = sum_psi + psi
+        if node in mesh_data.dirich_nodes:
+            nodes_pressures[node] = mesh_data.mb.tag_get_data(mesh_data.dirichlet_tag, node)
+            # print("Dirichlet nodes: ", mesh_data.mb.get_coords([node]))
+        if node in mesh_data.neu_nodes - mesh_data.dirich_nodes:
+            neumann_term = neumann_boundary_weight(
+                            mesh_data.mb, mesh_data.mtu, mesh_data.get_centroid,
+                            node, mesh_data.neumann_tag, mesh_data.perm_tag)
+            volume_weight = explicit_weights(
+                            mesh_data.mb, mesh_data.mtu, mesh_data.get_centroid,
+                            node, mesh_data.perm_tag)
+            pressure_node = 0
+            for vol,  weight in volume_weight:
+                vol_pressure = mesh_data.mb.tag_get_data(mesh_data.pressure_tag, vol)
+                pressure_node += vol_pressure * weight
+            nodes_pressures[node] = pressure_node - neumann_term
+            mesh_data.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
+            # print("Neumann nodes: ", mesh_data.mb.get_coords([node]))
 
-        node_press = wgtd_press/sum_psi
+        if node in set(mesh_data.all_nodes) - mesh_data.neu_nodes - mesh_data.dirich_nodes:
+            volume_weight = explicit_weights(
+                            mesh_data.mb, mesh_data.mtu, mesh_data.get_centroid,
+                            node, mesh_data.perm_tag)
+            pressure_node = 0
+            for vol,  weight in volume_weight:
+                vol_pressure = mesh_data.mb.tag_get_data(mesh_data.pressure_tag, vol)
+                pressure_node += vol_pressure * weight
+            nodes_pressures[node] = pressure_node
+            mesh_data.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
+            # print("Intern nodes: ", mesh_data.mb.get_coords([node]))
+    return nodes_pressures
 
-        try:
-            neumann_flow = mb.tag_get_data(neumann_tag, node)
-            neu_add = Neumann_treat_Bk(node, neumann_tag, K)
-            node_press = node_press - neu_add/sum_psi
-        except RuntimeError:
+
+def grad_trian(mesh_data, nodes_pressures):
+
+    all_faces = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 1)
+
+    for face in all_faces:
+        nodes = mesh_data.mb.get_bridge_adjacencies(face, 0, 0)
+        adjacent_volumes = mesh_data.mb.get_bridge_adjacencies(face, 2, 1)
+
+        for a_volume in adjacent_volumes:
             pass
-
-    return node_press
-
-
-
-def grad_trian(entity, p1, p2, K):
     coord_p1 = mb.get_coords([p1])
     coord_p2 = mb.get_coords([p2])
     coord_cent = get_centroid(entity)
@@ -505,6 +514,7 @@ def grad_trian(entity, p1, p2, K):
         press_cent*normal_op_cent)
     #print press_1, press_2, area_tri
     #print grad_tri, coord_cent
+    pass
     return grad_tri
 
 

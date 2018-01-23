@@ -21,16 +21,26 @@ mesh_data.all_hanging_nodes_full_edges()
 # Calculates pressure field with arbitrary method (eg. MPFA-D, TPFA, MPFA-O)
 pressure_field = pressure_solver.MPFA_D(mesh_data)
 
+#Calculates node pressures
+node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
+
+#Saves mesh data to a file
 mesh_data.mb.write_file("testing_object.vtk")
 
-print(len(mesh_data.all_nodes))
-mesh_data.mb.create_vertices(np.array([0.5, 0.5, 0.0]))
-print("Teste quant: ", len(mesh_data.all_nodes), len(mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 0)))
+# Testing node pressures to linear problem
+all_nodes = mesh_data.all_nodes
+for node in all_nodes:
+    coord = mesh_data.mb.get_coords([node])
+    print("NODE Val: ", 1.0 - coord[0], node_pressures[node], (
+            1.0 - coord[0]) - node_pressures[node])
 
+# print(len(mesh_data.all_nodes))
+# mesh_data.mb.create_vertices(np.array([0.5, 0.5, 0.0]))
+# print("Teste quant: ", len(mesh_data.all_nodes), len(mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 0)))
 
+# Testing centroid pressures to linear problem
 all_volumes = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 2)
 for i in range(len(all_volumes)):
     coord_x = mesh_data.get_centroid(all_volumes[i])[0]
-    # print("test: ", 1.0 - coord_x == pressures[i])
     print("Val: ", 1.0 - coord_x, pressure_field[i], (
-            1.0 - coord_x) - pressure_field[i])#, get_centroid(all_volumes[i]))
+            1.0 - coord_x) - pressure_field[i])
