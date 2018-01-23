@@ -454,7 +454,9 @@ def get_nodes_pressures(mesh_data):
 
         if node in mesh_data.dirich_nodes:
             nodes_pressures[node] = mesh_data.mb.tag_get_data(mesh_data.dirichlet_tag, node)
+            mesh_data.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
             # print("Dirichlet nodes: ", mesh_data.mb.get_coords([node]))
+            
         if node in mesh_data.neu_nodes - mesh_data.dirich_nodes:
             neumann_term = neumann_boundary_weight(
                             mesh_data.mb, mesh_data.mtu, mesh_data.get_centroid,
