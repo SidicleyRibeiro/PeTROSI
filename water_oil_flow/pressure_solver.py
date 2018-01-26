@@ -456,7 +456,7 @@ def get_nodes_pressures(mesh_data):
             nodes_pressures[node] = mesh_data.mb.tag_get_data(mesh_data.dirichlet_tag, node)
             mesh_data.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
             # print("Dirichlet nodes: ", mesh_data.mb.get_coords([node]))
-            
+
         if node in mesh_data.neu_nodes - mesh_data.dirich_nodes:
             neumann_term = neumann_boundary_weight(
                             mesh_data.mb, mesh_data.mtu, mesh_data.get_centroid,
@@ -483,61 +483,43 @@ def get_nodes_pressures(mesh_data):
             nodes_pressures[node] = pressure_node
             mesh_data.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
             # print("Intern nodes: ", mesh_data.mb.get_coords([node]))
+    mesh_data.mb.write_file("node_pressure_field.vtk")
     return nodes_pressures
 
 
-def grad_trian(mesh_data, nodes_pressures):
+def pressure_grad(mesh_data):
 
     all_faces = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 1)
 
+    face_grad = {}
     for face in all_faces:
-        nodes = mesh_data.mb.get_bridge_adjacencies(face, 0, 0)
-        adjacent_volumes = mesh_data.mb.get_bridge_adjacencies(face, 2, 1)
 
+        node_I, node_J = mesh_data.mtu.get_bridge_adjacencies(face, 0, 0)
+        adjacent_volumes = mesh_data.mb.get_adjacencies(face, 2)
+
+        coords_I = mesh_data.mb.get_coords([node_I])
+        coords_J = mesh_data.mb.get_coords([node_J])
+
+        pressure_I = mesh_data.mb.tag_get_data(mesh_data.node_pressure_tag, node_I)
+        pressure_J = mesh_data.mb.tag_get_data(mesh_data.node_pressure_tag, node_J)
+
+        face_grad[face] = {}
         for a_volume in adjacent_volumes:
-            pass
-    coord_p1 = mb.get_coords([p1])
-    coord_p2 = mb.get_coords([p2])
-    coord_cent = get_centroid(entity)
-    #print coord_p1, coord_p2, coord_cent
-    area_tri = area(coord_p1, coord_p2, coord_cent)
 
-    press_1 = node_pressure(p1, pressure_tag, K).flatten()
-    press_2 = node_pressure(p2, pressure_tag, K).flatten()
-    press_cent = mb.tag_get_data(pressure_tag, entity).flatten()
-    #print press_1, press_2, press_cent
-    normal_op_p1 = norm_vec(coord_p2, coord_cent, coord_p1)
-    normal_op_p2 = norm_vec(coord_p1, coord_cent, coord_p2)
-    normal_op_cent = norm_vec(coord_p1, coord_p2, coord_cent)
+            volume_centroid = mesh_data.get_centroid(a_volume)
+            centroid_pressure = mesh_data.mb.tag_get_data(mesh_data.pressure_tag, a_volume)
 
-    grad_tri = (-1/(2*area_tri))*(
-        press_1*normal_op_p1 +
-        press_2*normal_op_p2 +
-        press_cent*normal_op_cent)
-    #print press_1, press_2, area_tri
-    #print grad_tri, coord_cent
-    pass
-    return grad_tri
+            normal_IJ = norm_vec(coords_I, coords_J, volume_centroid)
+            normal_JC = norm_vec(coords_J, volume_centroid, coords_I)
+            normal_CI = norm_vec(volume_centroid, coords_I, coords_J)
 
+            area_iter = area(coords_I, coords_J, volume_centroid)
 
+            grad_p = (-1/(2 * area_iter)) * (
+                    pressure_I * normal_JC +
+                    pressure_J * normal_CI +
+                    centroid_pressure * normal_IJ)
 
+            face_grad[face][a_volume] = grad_p
 
-
-
-# pressures = MPFA_D(dirichlet_nodes, neumann_nodes, intern_nodes)
-# print("PRESSURES:", pressures)
-# all_verts = mb.get_entities_by_dimension(root_set, 0)
-# for vert in all_verts:
-#     coords = mb.get_coords([vert])
-#     print("Verts coords: ", coords)
-#
-# for i in range(len(all_volumes)):
-#     coord_x = get_centroid(all_volumes[i])[0]
-#     # print("test: ", 1.0 - coord_x == pressures[i])
-#     print("Val: ", 1.0 - coord_x, pressures[i], (
-#             1.0 - coord_x) - pressures[i])#, get_centroid(all_volumes[i]))
-#
-# print("-------------------------------------")
-# print("Campo de pressoes calculado!")
-# print("-------------------------------------")
-# print(pressures)
+    return face_grad

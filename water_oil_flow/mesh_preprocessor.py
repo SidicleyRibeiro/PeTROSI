@@ -35,6 +35,9 @@ class Mesh_Manager:
         self.perm_tag = self.mb.tag_get_handle(
             "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
+        self.pressure_grad_tag = self.mb.tag_get_handle(
+            "Pressure_Gradient", 3, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
         self.error_tag = self.mb.tag_get_handle(
             "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 

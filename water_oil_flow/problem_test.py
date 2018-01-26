@@ -24,6 +24,9 @@ pressure_field = pressure_solver.MPFA_D(mesh_data)
 #Calculates node pressures
 node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
 
+#Calculates pressure gradient field
+pressure_gradient = pressure_solver.pressure_grad(mesh_data)
+print("Pressure gradient: ", pressure_gradient)
 #Saves mesh data to a file
 mesh_data.mb.write_file("testing_object.vtk")
 
