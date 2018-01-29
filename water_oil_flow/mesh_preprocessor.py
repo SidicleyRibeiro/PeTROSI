@@ -38,6 +38,9 @@ class Mesh_Manager:
         self.pressure_grad_tag = self.mb.tag_get_handle(
             "Pressure_Gradient", 3, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
+        self.well_tag = self.mb.tag_get_handle(
+            "Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
         self.error_tag = self.mb.tag_get_handle(
             "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
@@ -83,7 +86,7 @@ class Mesh_Manager:
         for id_ in ids:
             for tag in self.physical_sets:
                 tag_id = self.mb.tag_get_data(
-                        self.physical_tag, np.array([tag]), flat=True)
+                    self.physical_tag, np.array([tag]), flat=True)
                 entity_set = self.mb.get_entities_by_handle(tag, True)
 
                 if tag_id == id_:
@@ -96,30 +99,52 @@ class Mesh_Manager:
 
                             self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
                             self.mb.tag_set_data(
-                                    self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                                self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
                         if b_condition_type == "neumann":
                             self.neu_nodes = self.neu_nodes | set(nodes)
                             self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
                             self.mb.tag_set_data(
-                                    self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                                self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
-
+    @staticmethod
     def point_distance(coords_1, coords_2):
         dist_vector = coords_1 - coords_2
         distance = sqrt(np.dot(dist_vector, dist_vector))
         return distance
-        
 
-    def well_condition(self, coords, radius):
-        #Verify if "coords" represents a mesh node
-        for node in self.all_nodes:
-            node_coords = self.mb.get_coords([node])
-            if coords == node_coords:
-                self.well_adjacent_volumes = self.mb.get_adjacencies(node, 2)
-                if len(self.well_adjacent_volumes) > 1:
-                    for volume in self.well_adjacent_volumes:
 
+    def well_condition(self, wells_coords, src_terms):
+
+        for well_coords, src_term in zip(well_coords, src_terms):
+
+            for node in self.all_nodes:
+                node_coords = self.mb.get_coords([node])
+                #Verify if "well_coords" represents a mesh node
+                if np.dot(node_coords, well_coords) <= 1e-7:
+                    self.well_adjacent_volumes = self.mb.get_adjacencies(node, 2)
+                    well_weight_sum = 0
+                    well_weights = []
+
+                    if len(self.well_adjacent_volumes) > 1:
+
+                        for volume in self.well_adjacent_volumes:
+                            vol_centroid = self.get_centroid(volume)
+                            dist_node_to_volume = point_distance(node_coords, vol_centroid)
+                            vol_weight = 1.0 / dist_node_to_volume
+                            well_weight_sum += vol_weight
+                            well_weights.append(vol_weight)
+                        well_weights = (well_weights/well_weight_sum) * src_term
+
+                        self.mb.tag_set_data(
+                            self.well_tag, self.well_adjacent_volumes, np.asarray(well_weights))
+
+                    else:
+                        self.mb.tag_set_data(
+                            self.well_tag, self.well_adjacent_volumes, src_term)
+
+                else:
+                    
 
         pass
 
