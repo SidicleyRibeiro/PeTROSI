@@ -7,8 +7,10 @@ mesh_file = "geometry_test.msh"
 # Sets boundary conditions with correspondant values to tags defined on mesh file
 boundary_conditions = {"dirichlet":{101:0.0, 102:1.0}, "neumann": {201:0.0}}
 
-# Instanciates "Mesh_Manager" with mesh file and boundary conditions
+# Sets well(s) conditions
+well_condition = {np.array([])}
 
+# Instanciates "Mesh_Manager" with mesh file and boundary conditions
 mesh_data = mesh_preprocessor.Mesh_Manager(mesh_file, boundary_conditions)
 # Appends boundary condition values to mesh data
 mesh_data.bound_condition_values("neumann")

@@ -105,7 +105,22 @@ class Mesh_Manager:
                                     self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
 
+    def point_distance(coords_1, coords_2):
+        dist_vector = coords_1 - coords_2
+        distance = sqrt(np.dot(dist_vector, dist_vector))
+        return distance
+        
+
     def well_condition(self, coords, radius):
+        #Verify if "coords" represents a mesh node
+        for node in self.all_nodes:
+            node_coords = self.mb.get_coords([node])
+            if coords == node_coords:
+                self.well_adjacent_volumes = self.mb.get_adjacencies(node, 2)
+                if len(self.well_adjacent_volumes) > 1:
+                    for volume in self.well_adjacent_volumes:
+
+
         pass
 
 
