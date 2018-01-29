@@ -5,8 +5,6 @@ from pymoab import core
 from pymoab import types
 from pymoab import topo_util
 
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
 
 class Mesh_Manager:
 
@@ -136,23 +134,28 @@ class Mesh_Manager:
 
 
     @staticmethod
-    def is_inside_polygon(point, vol_coords):
+    def contains(test_point, vol_sorted_coords):
+        vects = np.array(
+            [crd_node - test_point for crd_node in vol_sorted_coords])
+        for i in range(len(vects)):
+            cross_prod_test = np.cross(vects[i-1, 0:2], vects[i, 0:2])
+            if cross_prod_test < 0:
+                return False
+        return True
         pass
 
     def well_condition(self, wells_coords, src_terms):
-
-        for well_coords, src_term in zip(well_coords, src_terms):
+        for well_coords, src_term in zip(wells_coords, src_terms):
 
             for node in self.all_nodes:
                 node_coords = self.mb.get_coords([node])
                 #Verify if "well_coords" represents a mesh node
                 if np.dot(node_coords, well_coords) <= 1e-7:
                     self.well_volumes = self.mb.get_adjacencies(node, 2)
-                    well_weight_sum = 0
-                    well_weights = []
 
                     if len(self.well_volumes) > 1:
-
+                        well_weight_sum = 0
+                        well_weights = []
                         for volume in self.well_volumes:
                             vol_centroid = self.get_centroid(volume)
                             dist_node_to_volume = point_distance(node_coords, vol_centroid)
@@ -172,19 +175,14 @@ class Mesh_Manager:
                     for volume in self.all_volumes:
                         connect_nodes = self.mb.get_adjacencies(volume, 0)
                         connect_nodes_crds = self.mb.get_coords(connect_nodes)
-                        connect_nodes_crds =
-                            np.reshape(connect_nodes_crds, (len(connect_nodes), 3))
+                        connect_nodes_crds = np.reshape(
+                            connect_nodes_crds, (len(connect_nodes), 3))
                         connect_nodes_crds = counterclock_sort(connect_nodes_crds)
-                        test_point = Point(well_coords)
-                        polygon_test = Polygon(connect_nodes_crds)
 
-                        if polygon_test.contains(test_point):
+                        if contains(well_coords, connect_nodes_crds):
                             self.well_volumes = volume
                             self.mb.tag_set_data(
                                 self.well_tag, self.well_volumes, src_term)
-
-
-        pass
 
 
     @staticmethod
