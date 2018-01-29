@@ -292,6 +292,11 @@ def MPFA_D(mesh_instance):
     B = np.zeros([len(all_volumes), 1])
     all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
+
+    for well_volume in m_inst.well_volumes:
+        well_src_term = mb.tag_get_data(well_tag, well_volume)
+        B[v_ids[well_volume]][0] += well_src_term
+
     for face in all_faces:
         adjacent_entitites = np.asarray(mb.get_adjacencies(face, 2), dtype='uint64')
         if len(adjacent_entitites) == 1:

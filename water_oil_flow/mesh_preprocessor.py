@@ -5,6 +5,8 @@ from pymoab import core
 from pymoab import types
 from pymoab import topo_util
 
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 class Mesh_Manager:
 
@@ -113,6 +115,29 @@ class Mesh_Manager:
         distance = sqrt(np.dot(dist_vector, dist_vector))
         return distance
 
+    @staticmethod
+    def counterclock_sort(coords):
+        inner_coord = sum(coords)/(len(coords))
+        vectors = np.array(
+            [crd_node - inner_coord for crd_node in coords])
+
+        directions = np.zeros(len(vectors))
+        for j in range(len(vectors)):
+            direction = ang_vectors(vectors[j], [1, 0, 0])
+            if vectors[j, 1] <= 0:
+                directions[j] = directions[j] + 2.0*pi - direction
+            else:
+                directions[j] = directions[j] + direction
+        indices = np.argsort(directions)
+        coords = np.asarray(coords, dtype = 'uint64')
+        coords_sorted = coords_sorted[indices]
+
+        return coords_sorted
+
+
+    @staticmethod
+    def is_inside_polygon(point, vol_coords):
+        pass
 
     def well_condition(self, wells_coords, src_terms):
 
@@ -122,13 +147,13 @@ class Mesh_Manager:
                 node_coords = self.mb.get_coords([node])
                 #Verify if "well_coords" represents a mesh node
                 if np.dot(node_coords, well_coords) <= 1e-7:
-                    self.well_adjacent_volumes = self.mb.get_adjacencies(node, 2)
+                    self.well_volumes = self.mb.get_adjacencies(node, 2)
                     well_weight_sum = 0
                     well_weights = []
 
-                    if len(self.well_adjacent_volumes) > 1:
+                    if len(self.well_volumes) > 1:
 
-                        for volume in self.well_adjacent_volumes:
+                        for volume in self.well_volumes:
                             vol_centroid = self.get_centroid(volume)
                             dist_node_to_volume = point_distance(node_coords, vol_centroid)
                             vol_weight = 1.0 / dist_node_to_volume
@@ -137,14 +162,27 @@ class Mesh_Manager:
                         well_weights = (well_weights/well_weight_sum) * src_term
 
                         self.mb.tag_set_data(
-                            self.well_tag, self.well_adjacent_volumes, np.asarray(well_weights))
+                            self.well_tag, self.well_volumes, np.asarray(well_weights))
 
                     else:
                         self.mb.tag_set_data(
-                            self.well_tag, self.well_adjacent_volumes, src_term)
+                            self.well_tag, self.well_volumes, src_term)
 
                 else:
-                    
+                    for volume in self.all_volumes:
+                        connect_nodes = self.mb.get_adjacencies(volume, 0)
+                        connect_nodes_crds = self.mb.get_coords(connect_nodes)
+                        connect_nodes_crds =
+                            np.reshape(connect_nodes_crds, (len(connect_nodes), 3))
+                        connect_nodes_crds = counterclock_sort(connect_nodes_crds)
+                        test_point = Point(well_coords)
+                        polygon_test = Polygon(connect_nodes_crds)
+
+                        if polygon_test.contains(test_point):
+                            self.well_volumes = volume
+                            self.mb.tag_set_data(
+                                self.well_tag, self.well_volumes, src_term)
+
 
         pass
 
