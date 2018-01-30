@@ -38,8 +38,11 @@ class Mesh_Manager:
         self.pressure_grad_tag = self.mb.tag_get_handle(
             "Pressure_Gradient", 3, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.well_tag = self.mb.tag_get_handle(
-            "Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        self.pressure_well_tag = self.mb.tag_get_handle(
+            "Pressure_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.flow_rate_well_tag = self.mb.tag_get_handle(
+            "Flow_Rate_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
         self.error_tag = self.mb.tag_get_handle(
             "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
@@ -141,13 +144,16 @@ class Mesh_Manager:
             cross_prod_test = np.cross(vects[i-1, 0:2], vects[i, 0:2])
             if cross_prod_test < 0:
                 return [-1]
-
         return [1]
 
 
-    def well_condition(self, wells_coords, src_terms):
-        self.all_well_volumes = np.asarray([], dtype='uint64')
-        for well_coords, src_term in zip(wells_coords, src_terms):
+    def well_condition(self, wells_infos, well_values):
+        self.all_pressure_well_vols = np.asarray([], dtype='uint64')
+        self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
+
+        for well_infos, well_value in zip(wells_infos, well_values):
+            well_type = well_infos.keys()
+            well_coords = well_infos.values()
             for volume in self.all_volumes:
                 connect_nodes = self.mb.get_adjacencies(volume, 0)
                 connect_nodes_crds = self.mb.get_coords(connect_nodes)
@@ -164,45 +170,72 @@ class Mesh_Manager:
                     continue
 
                 if self.contains(well_coords, connect_nodes_crds)[0] == 1:
-                    self.well_volumes = volume
-                    self.all_well_volumes = np.append(self.all_well_volumes, self.well_volumes)
-                    print("IN VOLUME: ", src_term)
-                    self.mb.tag_set_data(
-                        self.well_tag, self.well_volumes, np.asarray(src_term))
-                    break
+
+                    if well_type == "Pressure_Well":
+                        self.all_pressure_well_vols = np.append(
+                            self.all_pressure_well_vols, volume)
+                        print("IN VOLUME: ", well_value)
+                        self.mb.tag_set_data(
+                            self.pressure_well_tag, volume, np.asarray(well_value))
+                        break
+
+                    if well_type == "Flow_Rate_Well":
+                        self.all_flow_rate_well_vols = np.append(
+                            self.all_flow_rate_well_vols, volume)
+                        print("IN VOLUME: ", well_value)
+                        self.mb.tag_set_data(
+                            self.flow_rate_well_tag, volume, np.asarray(well_value))
+                        break
 
                 if self.contains(well_coords, connect_nodes_crds)[0] == 0:
                     indice = self.contains(well_coords, connect_nodes_crds)[1]
                     node = connect_nodes[indice]
                     node_coords = self.mb.get_coords([node])
-                    self.well_volumes = self.mb.get_adjacencies(node, 2)
-                    self.well_volumes = np.asarray(self.well_volumes, dtype='uint64')
-                    self.all_well_volumes = np.append(self.all_well_volumes, self.well_volumes)
-                    print("WELL COUNT: ", len(self.all_well_volumes), self.all_well_volumes)
-                    if len(self.well_volumes) > 1:
+                    adjacent_vols = self.mb.get_adjacencies(node, 2)
+                    adjacent_vols = np.asarray(adjacent_vols, dtype='uint64')
+
+                    if len(adjacent_vols) > 1:
                         well_weight_sum = 0
                         well_weights = []
-                        for volume in self.well_volumes:
+                        for volume in adjacent_vols:
                             vol_centroid = self.get_centroid(volume)
                             dist_node_to_volume = self.point_distance(node_coords, vol_centroid)
                             vol_weight = 1.0 / dist_node_to_volume
                             well_weight_sum += vol_weight
                             well_weights.append(vol_weight)
                         well_weights = np.asarray(well_weights, dtype='f8')
-                        well_weights = (well_weights / well_weight_sum) * src_term
-                        print("IN NODE: ", well_weights, len(self.well_volumes))
+                        well_weights = (well_weights / well_weight_sum) * well_value
+                        print("IN NODE: ", len(adjacent_vols))
 
-                        for volume, weight in zip(self.well_volumes, well_weights):
+                        if well_type == "Pressure_Well":
+                            self.all_pressure_well_vols = np.append(
+                                self.all_pressure_well_vols, adjacent_vols)
+                            self.mb.tag_set_data(self.pressure_well_tag, adjacent_vols, well_weights)
+                            break
 
-                            self.mb.tag_set_data(self.well_tag, volume, weight)
-                            print("VALUES WELLS: ",volume, weight)
-                        break
+                        if well_type == "Flow_Rate_Well":
+                            self.all_flow_rate_well_vols = np.append(
+                                self.all_flow_rate_well_vols, adjacent_vols)
+                            self.mb.tag_set_data(self.flow_rate_well_tag, adjacent_vols, well_weights)
+                            break
 
                     else:
-                        self.mb.tag_set_data(
-                            self.well_tag, self.well_volumes, np.asarray(src_term))
-                        print("IN NODE bla: ", src_term)
-                        break
+
+                        if well_type == "Pressure_Well":
+                            self.all_pressure_well_vols = np.append(
+                                self.all_pressure_well_vols, adjacent_vols)
+                            self.mb.tag_set_data(
+                                self.pressure_well_tag, adjacent_vols, np.asarray(well_value))
+                            print("IN NODE bla: ", well_value)
+                            break
+
+                        if well_type == "Flow_Rate_Well":
+                            self.all_flow_rate_well_vols = np.append(
+                                self.all_flow_rate_well_vols, adjacent_vols)
+                            self.mb.tag_set_data(
+                                self.flow_rate_well_tag, adjacent_vols, np.asarray(well_value))
+                            print("IN NODE bla: ", well_value)
+                            break
 
 
 
