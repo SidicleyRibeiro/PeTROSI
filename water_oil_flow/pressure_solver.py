@@ -253,16 +253,18 @@ def MPFA_D(mesh_instance):
 
     get_centroid = m_inst.get_centroid
 
+    dirichlet_faces = m_inst.dirich_faces
+    neumann_faces = m_inst.neu_faces
+    all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
+    intern_faces = set(all_faces) - (dirichlet_faces + neumann_faces)
+
     dirichlet_nodes = m_inst.dirich_nodes
     neumann_nodes = m_inst.neu_nodes - dirichlet_nodes
-
     all_nodes = set(mb.get_entities_by_dimension(m_inst.root_set, 0))
-    all_volumes = m_inst.all_volumes
-
-
     intern_nodes = all_nodes - dirichlet_nodes - neumann_nodes
-    # intern_nodes = intern_nodes - neumann_nodes
-    # print("After: ", dirichlet_nodes, neumann_nodes, intern_nodes)
+
+    all_volumes = set(m_inst.all_volumes)
+
     nodes_weights = {}
     ncount = 0
     for intern_node in intern_nodes:
@@ -284,28 +286,31 @@ def MPFA_D(mesh_instance):
     print("Calculou pesos de nos em contorno de neumann!")
     print("-------------------------------------------------------------------")
 
-    v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
-
-    # for ent in all_volumes:
-        # print("v_ids: ", v_ids[ent], get_centroid(ent))
-    A = np.zeros([len(all_volumes), len(all_volumes)])
-    B = np.zeros([len(all_volumes), 1])
-    all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
 
     for well_volume in m_inst.all_pressure_well_vols:
         well_pressure = mb.tag_get_data(m_inst.pressure_well_tag, well_volume)
         mb.tag_set_data(m_ist.pressure_tag, well_volume, well_pressure)
+        all_volumes = all_volumes - set(well_volume)
 
         well_volume_faces = mb.get_adjacencies(well_volume, 1, True)
-        for new_dirich_face in well_volume_faces:
-            new_dirich_nodes = mtu.get_bridge_adjacencies(new_dirich_face, 0, 0)
 
+        well_faces_in_boundary = set(well_volume_faces) & (dirichlet_faces | neumann_faces)
+        well_dirichlet_faces = well_volume_faces - well_faces_in_boundary
+        dirichlet_faces = dirichlet_faces | well_dirichlet_faces
+
+        dirichlet_faces = dirichlet_faces - well_faces_in_boundary
+        neumann_faces = neumann_faces - well_faces_in_boundary
+
+        for new_dirich_face in well_dirichlet_faces:
+            new_dirich_nodes = mtu.get_bridge_adjacencies(new_dirich_face, 0, 0)
+            dirichlet_nodes = dirichlet_nodes | set(new_dirich_nodes)
             mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_nodes, np.repeat([well_pressure], 2))
             mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_face, well_pressure)
-# Colocar nós em nós de dirichlet
-# Retirar faces de contorno
-# Colocar novas faces para a iteracao de todas as faces
+
+    v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
+    A = np.zeros([len(all_volumes), len(all_volumes)])
+    B = np.zeros([len(all_volumes), 1])
 
     for well_volume in m_inst.all_flow_rate_well_vols:
         # print("ALL WELLS: ", len(m_inst.all_well_volumes))
@@ -315,48 +320,54 @@ def MPFA_D(mesh_instance):
 
     for face in all_faces:
         adjacent_entitites = np.asarray(mb.get_adjacencies(face, 2), dtype='uint64')
-        if len(adjacent_entitites) == 1:
-            try:
-                neumann_flux = mb.tag_get_data(neumann_tag, face)
-                B[v_ids[adjacent_entitites[0]]][0] += -neumann_flux
-            except RuntimeError:
-                centroid_adjacent_entity = get_centroid(adjacent_entitites)
-                face_nodes = np.asarray(mb.get_adjacencies(face, 0), dtype='uint64')
-                coord_face_nodes = np.reshape(mb.get_coords(face_nodes), (2, 3))
-                count_wise_face = count_wise(coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
-                if np.dot(count_wise_face, coord_face_nodes[1] - coord_face_nodes[0]) < 0:
-                    coord_face_nodes[[0,1]] = coord_face_nodes[[1,0]]
-                    face_nodes[[0,1]] = face_nodes[[1,0]]
+        if face in neumann_faces:
+            neumann_flux = mb.tag_get_data(neumann_tag, face)
+            B[v_ids[adjacent_entitites[0]]][0] += -neumann_flux
 
-                pressure_first_node = mb.tag_get_data(dirichlet_tag, face_nodes[0])
-                pressure_second_node = mb.tag_get_data(dirichlet_tag, face_nodes[1]);
-                perm_adjacent_entity = mb.tag_get_data(perm_tag, adjacent_entitites).reshape([3, 3])
-                face_normal = norm_vec(
-                    coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
+        if face in dirichlet_faces:
 
-                K_n_B = K_n_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
-                #print("K_n_B: ", K_n_B, "coords: ", coord_face_nodes, "nodes: ", face_nodes)
-                K_t_B = K_t_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
-                h_B = h_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
-                module_face_normal = sqrt(np.dot(face_normal, face_normal))
+            if len(adjacent_entitites) == 2:
+                for a_entity in adjacent_entitites:
+                    if a_entity in v_ids.keys():
+                        adjacent_entities = a_entity
+                        break
+            centroid_adjacent_entity = get_centroid(adjacent_entitites)
+            face_nodes = np.asarray(mb.get_adjacencies(face, 0), dtype='uint64')
+            coord_face_nodes = np.reshape(mb.get_coords(face_nodes), (2, 3))
+            count_wise_face = count_wise(coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
+            if np.dot(count_wise_face, coord_face_nodes[1] - coord_face_nodes[0]) < 0:
+                coord_face_nodes[[0,1]] = coord_face_nodes[[1,0]]
+                face_nodes[[0,1]] = face_nodes[[1,0]]
 
-                aux_dot_product_first = np.dot(
-                    centroid_adjacent_entity - coord_face_nodes[1], coord_face_nodes[0] - coord_face_nodes[1])
-                # print("B2Ob: ", centroid_adjacent_entity - coord_face_nodes[1])
-                # print("B2B1: ", coord_face_nodes[0] - coord_face_nodes[1])
-                B[v_ids[adjacent_entitites[0]]][0] += (
-                    (K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node
-                # print("aux_prod: ", aux_dot_product_first)
-                # print("B1: ", ((K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node)
-                aux_dot_product_second = np.dot(
-                    centroid_adjacent_entity - coord_face_nodes[0], coord_face_nodes[1] - coord_face_nodes[0])
-                B[v_ids[adjacent_entitites[0]]][0] += (
-                    (K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node
-                # print("B2: ", ((K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node)
-                A[v_ids[adjacent_entitites[0]]][v_ids[adjacent_entitites[0]]] += K_n_B * module_face_normal/h_B
-                #print("Dirich. coefic.: ", A, K_n_B * module_face_normal/h_B)
+            pressure_first_node = mb.tag_get_data(dirichlet_tag, face_nodes[0])
+            pressure_second_node = mb.tag_get_data(dirichlet_tag, face_nodes[1]);
+            perm_adjacent_entity = mb.tag_get_data(perm_tag, adjacent_entitites).reshape([3, 3])
+            face_normal = norm_vec(
+                coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
 
-        if len(adjacent_entitites) == 2:
+            K_n_B = K_n_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
+            #print("K_n_B: ", K_n_B, "coords: ", coord_face_nodes, "nodes: ", face_nodes)
+            K_t_B = K_t_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
+            h_B = h_X(coord_face_nodes, centroid_adjacent_entity, perm_adjacent_entity)
+            module_face_normal = sqrt(np.dot(face_normal, face_normal))
+
+            aux_dot_product_first = np.dot(
+                centroid_adjacent_entity - coord_face_nodes[1], coord_face_nodes[0] - coord_face_nodes[1])
+            # print("B2Ob: ", centroid_adjacent_entity - coord_face_nodes[1])
+            # print("B2B1: ", coord_face_nodes[0] - coord_face_nodes[1])
+            B[v_ids[adjacent_entitites[0]]][0] += (
+                (K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node
+            # print("aux_prod: ", aux_dot_product_first)
+            # print("B1: ", ((K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node)
+            aux_dot_product_second = np.dot(
+                centroid_adjacent_entity - coord_face_nodes[0], coord_face_nodes[1] - coord_face_nodes[0])
+            B[v_ids[adjacent_entitites[0]]][0] += (
+                (K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node
+            # print("B2: ", ((K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node)
+            A[v_ids[adjacent_entitites[0]]][v_ids[adjacent_entitites[0]]] += K_n_B * module_face_normal/h_B
+            #print("Dirich. coefic.: ", A, K_n_B * module_face_normal/h_B)
+
+        if face in intern_nodes:
 
             first_volume = adjacent_entitites[0]
             second_volume = adjacent_entitites[1]

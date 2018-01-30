@@ -83,6 +83,9 @@ class Mesh_Manager:
         self.dirich_nodes = set()
         self.neu_nodes = set()
 
+        self.dirich_faces = set()
+        self.neu_faces = set()
+
         for id_ in ids:
             for tag in self.physical_sets:
                 tag_id = self.mb.tag_get_data(
@@ -94,7 +97,7 @@ class Mesh_Manager:
                         nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
 
                         if b_condition_type == "dirichlet":
-
+                            self.dirich_faces = self.dirich_faces | set(ent)
                             self.dirich_nodes = self.dirich_nodes | set(nodes)
 
                             self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
@@ -102,7 +105,9 @@ class Mesh_Manager:
                                 self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
 
                         if b_condition_type == "neumann":
+                            self.neu_faces = self.neu_faces | set(ent)
                             self.neu_nodes = self.neu_nodes | set(nodes)
+
                             self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
                             self.mb.tag_set_data(
                                 self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
