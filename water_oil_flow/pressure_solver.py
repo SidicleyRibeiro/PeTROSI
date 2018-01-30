@@ -268,7 +268,7 @@ def MPFA_D(mesh_instance):
     for intern_node in intern_nodes:
         intern_node_weight = explicit_weights(mb, mtu, get_centroid, intern_node, perm_tag)
         nodes_weights[intern_node] = intern_node_weight
-        print("No ", ncount, " de", len(intern_nodes))
+        # print("No ", ncount, " de", len(intern_nodes))
         ncount = ncount + 1
         # print("Pesos: ", intern_node, mb.get_coords([intern_node]), nodes_weights)
     neumann_nodes_weights = {}
@@ -279,22 +279,24 @@ def MPFA_D(mesh_instance):
     for neumann_node in neumann_nodes:
         neumann_node_weight = explicit_weights(mb, mtu, get_centroid, neumann_node, perm_tag)
         neumann_nodes_weights[neumann_node] = neumann_node_weight
-        print("Neumann node:  ", mb.get_coords([neumann_node]))
+        # print("Neumann node:  ", mb.get_coords([neumann_node]))
     print("-------------------------------------------------------------------")
     print("Calculou pesos de nos em contorno de neumann!")
     print("-------------------------------------------------------------------")
 
     v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
 
-    for ent in all_volumes:
-        print("v_ids: ", v_ids[ent], get_centroid(ent))
+    # for ent in all_volumes:
+        # print("v_ids: ", v_ids[ent], get_centroid(ent))
     A = np.zeros([len(all_volumes), len(all_volumes)])
     B = np.zeros([len(all_volumes), 1])
     all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
 
-    for well_volume in m_inst.well_volumes:
-        well_src_term = mb.tag_get_data(well_tag, well_volume)
+    for well_volume in m_inst.all_well_volumes:
+        print("ALL WELLS: ", len(m_inst.all_well_volumes))
+        well_src_term = mb.tag_get_data(m_inst.well_tag, well_volume)
+        print ("well vol: ", get_centroid(well_volume), well_src_term, len([m_inst.well_volumes]))
         B[v_ids[well_volume]][0] += well_src_term
 
     for face in all_faces:
@@ -440,7 +442,7 @@ def MPFA_D(mesh_instance):
                     A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
                     A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
 
-        print("Calculou face ", count, " de ", len(all_faces))
+        # print("Calculou face ", count, " de ", len(all_faces))
         count = count + 1
 
     print(A)

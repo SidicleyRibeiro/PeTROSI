@@ -5,17 +5,17 @@ import numpy as np
 mesh_file = "geometry_well_test.msh"
 
 # Sets boundary conditions with correspondant values to tags defined on mesh file
-boundary_conditions = {"dirichlet":{101:0.0, 102:1.0}, "neumann": {201:0.0}}
+boundary_conditions = {"neumann": {201:0.0}}
 
 # Sets well(s) conditions
-wells_coords = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
-wells_src_terms = np.array([-1, 1])
+wells_coords = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+wells_src_terms = np.array([-1.0, 1.0])
 
 # Instanciates "Mesh_Manager" with mesh file and boundary conditions
 mesh_data = mesh_preprocessor.Mesh_Manager(mesh_file, boundary_conditions)
 # Appends boundary condition values to mesh data
 mesh_data.bound_condition_values("neumann")
-mesh_data.bound_condition_values("dirichlet")
+#mesh_data.bound_condition_values("dirichlet")
 
 # Appends well sorce term to mesh volumes
 mesh_data.well_condition(wells_coords, wells_src_terms)
@@ -32,7 +32,7 @@ node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
 
 #Calculates pressure gradient field
 pressure_gradient = pressure_solver.pressure_grad(mesh_data)
-print("Pressure gradient: ", pressure_gradient)
+# print("Pressure gradient: ", pressure_gradient)
 #Saves mesh data to a file
 mesh_data.mb.write_file("testing_object.vtk")
 

@@ -77,11 +77,8 @@ class Mesh_Manager:
         ids_values = self.b_conditions[b_condition_type]
         ids = list(ids_values.keys())
 
-        if b_condition_type == "dirichlet":
-            self.dirich_nodes = set()
-
-        if b_condition_type == "neumann":
-            self.neu_nodes = set()
+        self.dirich_nodes = set()
+        self.neu_nodes = set()
 
         for id_ in ids:
             for tag in self.physical_sets:
@@ -113,24 +110,21 @@ class Mesh_Manager:
         distance = sqrt(np.dot(dist_vector, dist_vector))
         return distance
 
-    @staticmethod
-    def counterclock_sort(coords):
+
+    def counterclock_sort(self, coords):
         inner_coord = sum(coords)/(len(coords))
         vectors = np.array(
             [crd_node - inner_coord for crd_node in coords])
 
         directions = np.zeros(len(vectors))
         for j in range(len(vectors)):
-            direction = ang_vectors(vectors[j], [1, 0, 0])
+            direction = self.ang_vectors(vectors[j], [1, 0, 0])
             if vectors[j, 1] <= 0:
                 directions[j] = directions[j] + 2.0*pi - direction
             else:
                 directions[j] = directions[j] + direction
         indices = np.argsort(directions)
-        coords = np.asarray(coords, dtype = 'uint64')
-        coords_sorted = coords_sorted[indices]
-
-        return coords_sorted
+        return indices
 
 
     @staticmethod
@@ -138,51 +132,78 @@ class Mesh_Manager:
         vects = np.array(
             [crd_node - test_point for crd_node in vol_sorted_coords])
         for i in range(len(vects)):
+
+            if np.dot(vects[i], vects[i]) < 1e-16:
+                return [0, i]
+            if np.dot(vects[i-1], vects[i-1]) < 1e-16:
+                return [0, i-1]
+
             cross_prod_test = np.cross(vects[i-1, 0:2], vects[i, 0:2])
             if cross_prod_test < 0:
-                return False
-        return True
-        pass
+                return [-1]
+
+        return [1]
+
 
     def well_condition(self, wells_coords, src_terms):
+        self.all_well_volumes = np.asarray([], dtype='uint64')
         for well_coords, src_term in zip(wells_coords, src_terms):
+            for volume in self.all_volumes:
+                connect_nodes = self.mb.get_adjacencies(volume, 0)
+                connect_nodes_crds = self.mb.get_coords(connect_nodes)
+                connect_nodes_crds = np.reshape(
+                    connect_nodes_crds, (len(connect_nodes), 3))
+                # print("coords: ", connect_nodes_crds)
+                indices = self.counterclock_sort(connect_nodes_crds)
+                # print("indices: ", indices)
+                connect_nodes_crds = connect_nodes_crds[indices]
+                connect_nodes = np.asarray(connect_nodes, dtype='uint64')
+                connect_nodes = connect_nodes[indices]
 
-            for node in self.all_nodes:
-                node_coords = self.mb.get_coords([node])
-                #Verify if "well_coords" represents a mesh node
-                if np.dot(node_coords, well_coords) <= 1e-7:
+                if self.contains(well_coords, connect_nodes_crds)[0] == -1:
+                    continue
+
+                if self.contains(well_coords, connect_nodes_crds)[0] == 1:
+                    self.well_volumes = volume
+                    self.all_well_volumes = np.append(self.all_well_volumes, self.well_volumes)
+                    print("IN VOLUME: ", src_term)
+                    self.mb.tag_set_data(
+                        self.well_tag, self.well_volumes, np.asarray(src_term))
+                    break
+
+                if self.contains(well_coords, connect_nodes_crds)[0] == 0:
+                    indice = self.contains(well_coords, connect_nodes_crds)[1]
+                    node = connect_nodes[indice]
+                    node_coords = self.mb.get_coords([node])
                     self.well_volumes = self.mb.get_adjacencies(node, 2)
-
+                    self.well_volumes = np.asarray(self.well_volumes, dtype='uint64')
+                    self.all_well_volumes = np.append(self.all_well_volumes, self.well_volumes)
+                    print("WELL COUNT: ", len(self.all_well_volumes), self.all_well_volumes)
                     if len(self.well_volumes) > 1:
                         well_weight_sum = 0
                         well_weights = []
                         for volume in self.well_volumes:
                             vol_centroid = self.get_centroid(volume)
-                            dist_node_to_volume = point_distance(node_coords, vol_centroid)
+                            dist_node_to_volume = self.point_distance(node_coords, vol_centroid)
                             vol_weight = 1.0 / dist_node_to_volume
                             well_weight_sum += vol_weight
                             well_weights.append(vol_weight)
-                        well_weights = (well_weights/well_weight_sum) * src_term
+                        well_weights = np.asarray(well_weights, dtype='f8')
+                        well_weights = (well_weights / well_weight_sum) * src_term
+                        print("IN NODE: ", well_weights, len(self.well_volumes))
 
-                        self.mb.tag_set_data(
-                            self.well_tag, self.well_volumes, np.asarray(well_weights))
+                        for volume, weight in zip(self.well_volumes, well_weights):
+
+                            self.mb.tag_set_data(self.well_tag, volume, weight)
+                            print("VALUES WELLS: ",volume, weight)
+                        break
 
                     else:
                         self.mb.tag_set_data(
-                            self.well_tag, self.well_volumes, src_term)
+                            self.well_tag, self.well_volumes, np.asarray(src_term))
+                        print("IN NODE bla: ", src_term)
+                        break
 
-                else:
-                    for volume in self.all_volumes:
-                        connect_nodes = self.mb.get_adjacencies(volume, 0)
-                        connect_nodes_crds = self.mb.get_coords(connect_nodes)
-                        connect_nodes_crds = np.reshape(
-                            connect_nodes_crds, (len(connect_nodes), 3))
-                        connect_nodes_crds = counterclock_sort(connect_nodes_crds)
-
-                        if contains(well_coords, connect_nodes_crds):
-                            self.well_volumes = volume
-                            self.mb.tag_set_data(
-                                self.well_tag, self.well_volumes, src_term)
 
 
     @staticmethod
