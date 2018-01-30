@@ -8,8 +8,9 @@ mesh_file = "geometry_well_test.msh"
 boundary_conditions = {"neumann": {201:0.0}}
 
 # Sets well(s) conditions
-wells_coords = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
-wells_src_terms = np.array([-1.0, 1.0])
+wells_infos = [{"Pressure_Well": np.array([0.0, 0.0, 0.0])},
+                {"Flow_Rate_Well": np.array([1.0, 1.0, 0.0])}]
+wells_src_terms = [1.0, 1.0]
 
 # Instanciates "Mesh_Manager" with mesh file and boundary conditions
 mesh_data = mesh_preprocessor.Mesh_Manager(mesh_file, boundary_conditions)
@@ -39,9 +40,8 @@ mesh_data.mb.write_file("testing_object.vtk")
 # Testing node pressures to linear problem
 all_nodes = mesh_data.all_nodes
 for node in all_nodes:
-    coord = mesh_data.mb.get_coords([node])
-    print("NODE Val: ", 1.0 - coord[0], node_pressures[node], (
-            1.0 - coord[0]) - node_pressures[node])
+    coords_node = mesh_data.mb.get_coords([node])
+    print("NODE Val: ", coords_node, node_pressures[node])
 
 # print(len(mesh_data.all_nodes))
 # mesh_data.mb.create_vertices(np.array([0.5, 0.5, 0.0]))
@@ -50,6 +50,5 @@ for node in all_nodes:
 # Testing centroid pressures to linear problem
 all_volumes = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 2)
 for i in range(len(all_volumes)):
-    coord_x = mesh_data.get_centroid(all_volumes[i])[0]
-    print("Val: ", 1.0 - coord_x, pressure_field[i], (
-            1.0 - coord_x) - pressure_field[i])
+    coords_vol = mesh_data.get_centroid(all_volumes[i])
+    print("Val: ", coords_vol, pressure_field[i])

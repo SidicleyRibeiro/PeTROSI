@@ -293,9 +293,23 @@ def MPFA_D(mesh_instance):
     all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
     count = 0
 
-    for well_volume in m_inst.all_well_volumes:
-        print("ALL WELLS: ", len(m_inst.all_well_volumes))
-        well_src_term = mb.tag_get_data(m_inst.well_tag, well_volume)
+    for well_volume in m_inst.all_pressure_well_vols:
+        well_pressure = mb.tag_get_data(m_inst.pressure_well_tag, well_volume)
+        mb.tag_set_data(m_ist.pressure_tag, well_volume, well_pressure)
+
+        well_volume_faces = mb.get_adjacencies(well_volume, 1, True)
+        for new_dirich_face in well_volume_faces:
+            new_dirich_nodes = mtu.get_bridge_adjacencies(new_dirich_face, 0, 0)
+
+            mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_nodes, np.repeat([well_pressure], 2))
+            mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_face, well_pressure)
+# Colocar nós em nós de dirichlet
+# Retirar faces de contorno
+# Colocar novas faces para a iteracao de todas as faces
+
+    for well_volume in m_inst.all_flow_rate_well_vols:
+        # print("ALL WELLS: ", len(m_inst.all_well_volumes))
+        well_src_term = mb.tag_get_data(m_inst.flow_rate_well_tag, well_volume)
         print ("well vol: ", get_centroid(well_volume), well_src_term, len([m_inst.well_volumes]))
         B[v_ids[well_volume]][0] += well_src_term
 

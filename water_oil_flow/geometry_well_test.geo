@@ -14,6 +14,7 @@ Transfinite Line {3, 4} = 4;
 Transfinite Surface {6} = {1, 2, 3, 4};
 Recombine Surface {6};
 
+Physical Poit(201) = {1, 2, 3, 4};
 //Physical Point(101) = {2, 3};
 //Physical Point(102) = {1, 4};
 
@@ -25,4 +26,3 @@ Physical Line(201) = {4, 2, 3, 1};
 Physical Surface(1) = {6};
 //Transfinite Line {4} = 10 Using Progression 1;
 //Transfinite Line {1, 2, 3} = 10 Using Progression 1;
-Coherence;
