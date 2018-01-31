@@ -271,7 +271,6 @@ def edgewise_adaptation(elem, hanging_nodes_tag, full_edges_tag, ref_degree_tag)
     parcial_nodes = parcial_nodes[indices]
 
 
-
     parcial_elem = mb.create_element(types.MBPOLYGON, parcial_nodes)
     mtu.construct_aentities(Range(parcial_nodes))
 

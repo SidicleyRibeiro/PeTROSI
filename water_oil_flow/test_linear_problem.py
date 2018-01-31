@@ -28,7 +28,7 @@ node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
 pressure_gradient = pressure_solver.pressure_grad(mesh_data)
 print("Pressure gradient: ", pressure_gradient)
 #Saves mesh data to a file
-mesh_data.mb.write_file("testing_object.h5m")
+mesh_data.mb.write_file("test_linear_problem.vtk")
 
 # Testing node pressures to linear problem
 all_nodes = mesh_data.all_nodes

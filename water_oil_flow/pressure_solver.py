@@ -256,7 +256,7 @@ def MPFA_D(mesh_instance):
     dirichlet_faces = m_inst.dirich_faces
     neumann_faces = m_inst.neu_faces
     all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
-    intern_faces = set(all_faces) - (dirichlet_faces + neumann_faces)
+    intern_faces = set(all_faces) - (dirichlet_faces | neumann_faces)
 
     dirichlet_nodes = m_inst.dirich_nodes
     neumann_nodes = m_inst.neu_nodes - dirichlet_nodes
@@ -287,51 +287,72 @@ def MPFA_D(mesh_instance):
     print("-------------------------------------------------------------------")
 
     count = 0
-
-    for well_volume in m_inst.all_pressure_well_vols:
-        well_pressure = mb.tag_get_data(m_inst.pressure_well_tag, well_volume)
-        mb.tag_set_data(m_ist.pressure_tag, well_volume, well_pressure)
-        all_volumes = all_volumes - set(well_volume)
-
-        well_volume_faces = mb.get_adjacencies(well_volume, 1, True)
-
-        well_faces_in_boundary = set(well_volume_faces) & (dirichlet_faces | neumann_faces)
-        well_dirichlet_faces = well_volume_faces - well_faces_in_boundary
-        dirichlet_faces = dirichlet_faces | well_dirichlet_faces
-
-        dirichlet_faces = dirichlet_faces - well_faces_in_boundary
-        neumann_faces = neumann_faces - well_faces_in_boundary
-
-        for new_dirich_face in well_dirichlet_faces:
-            new_dirich_nodes = mtu.get_bridge_adjacencies(new_dirich_face, 0, 0)
-            dirichlet_nodes = dirichlet_nodes | set(new_dirich_nodes)
-            mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_nodes, np.repeat([well_pressure], 2))
-            mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_face, well_pressure)
+    # if len(m_inst.all_pressure_well_vols) > 0:
+    #     for well_volume in m_inst.all_pressure_well_vols:
+    #         well_pressure = mb.tag_get_data(m_inst.pressure_well_tag, well_volume)
+    #         mb.tag_set_data(m_inst.pressure_tag, well_volume, well_pressure)
+    #         print("WELL VOLUME", m_inst.all_pressure_well_vols, well_volume)
+    #         all_volumes = all_volumes - set([well_volume])
+    #
+    #         well_volume_faces = mb.get_adjacencies(well_volume, 1, True)
+    #
+    #         well_faces_in_boundary = set(well_volume_faces) & (dirichlet_faces | neumann_faces)
+    #         well_dirichlet_faces = set(well_volume_faces) - well_faces_in_boundary
+    #         dirichlet_faces = dirichlet_faces | well_dirichlet_faces
+    #
+    #         dirichlet_faces = dirichlet_faces - well_faces_in_boundary
+    #         neumann_faces = neumann_faces - well_faces_in_boundary
+    #         intern_faces = intern_faces - well_dirichlet_faces
+    #
+    #         for new_dirich_face in well_dirichlet_faces:
+    #             new_dirich_nodes = mtu.get_bridge_adjacencies(new_dirich_face, 0, 0)
+    #             dirichlet_nodes = dirichlet_nodes | set(new_dirich_nodes)
+    #             mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_nodes, np.repeat([well_pressure], 2))
+    #             mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_face, well_pressure)
+    #
+    #     neumann_nodes = neumann_nodes - dirichlet_nodes
+    #     intern_nodes = intern_nodes - dirichlet_nodes
 
     v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
     A = np.zeros([len(all_volumes), len(all_volumes)])
     B = np.zeros([len(all_volumes), 1])
 
+    perto = mtu.get_bridge_adjacencies(2305843009213693954, 1, 2)
+    print("TESTE CENTROIDE: ", get_centroid(2305843009213693954))
+    nodes = mb.get_adjacencies(2305843009213693954, 0)
+
+    coords = mb.get_coords(nodes).reshape([len(nodes), 3])
+    print("NODES TESTE: ", coords)
+    for pir in perto:
+        print("CENTROIDES: ", get_centroid(pir))
+    # for elem_teste in all_volumes:
+    #     print("ELEM TESTE:", elem_teste, get_centroid(elem_teste))
+
     for well_volume in m_inst.all_flow_rate_well_vols:
         # print("ALL WELLS: ", len(m_inst.all_well_volumes))
+        print("WELL POS: ", get_centroid(well_volume), len(m_inst.all_flow_rate_well_vols))
         well_src_term = mb.tag_get_data(m_inst.flow_rate_well_tag, well_volume)
-        print ("well vol: ", get_centroid(well_volume), well_src_term, len([m_inst.well_volumes]))
         B[v_ids[well_volume]][0] += well_src_term
 
+    print("FACE COUNT: ", len(dirichlet_faces), len(neumann_faces), len(intern_faces))
     for face in all_faces:
-        adjacent_entitites = np.asarray(mb.get_adjacencies(face, 2), dtype='uint64')
+        adjacent_entities = np.asarray(mb.get_adjacencies(face, 2), dtype='uint64')
         if face in neumann_faces:
             neumann_flux = mb.tag_get_data(neumann_tag, face)
-            B[v_ids[adjacent_entitites[0]]][0] += -neumann_flux
+            B[v_ids[adjacent_entities[0]]][0] += -neumann_flux
 
         if face in dirichlet_faces:
 
-            if len(adjacent_entitites) == 2:
-                for a_entity in adjacent_entitites:
-                    if a_entity in v_ids.keys():
-                        adjacent_entities = a_entity
+            if len(adjacent_entities) == 2:
+                for a_entity in adjacent_entities:
+                    print("ADJ_CENTROIDS: ", get_centroid(a_entity), a_entity)
+                    print("IDS: ", list(v_ids.keys()))
+                    if a_entity in set(list(v_ids.keys())):
+                        adjacent_entities = [a_entity]
+                        print("ENCONTROU!", adjacent_entities, get_centroid(adjacent_entities))
                         break
-            centroid_adjacent_entity = get_centroid(adjacent_entitites)
+
+            centroid_adjacent_entity = get_centroid(adjacent_entities)
             face_nodes = np.asarray(mb.get_adjacencies(face, 0), dtype='uint64')
             coord_face_nodes = np.reshape(mb.get_coords(face_nodes), (2, 3))
             count_wise_face = count_wise(coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
@@ -341,7 +362,8 @@ def MPFA_D(mesh_instance):
 
             pressure_first_node = mb.tag_get_data(dirichlet_tag, face_nodes[0])
             pressure_second_node = mb.tag_get_data(dirichlet_tag, face_nodes[1]);
-            perm_adjacent_entity = mb.tag_get_data(perm_tag, adjacent_entitites).reshape([3, 3])
+            perm_adjacent_entity = mb.tag_get_data(perm_tag, adjacent_entities).reshape([3, 3])
+            # print("PERMEAB: ", perm_adjacent_entity)
             face_normal = norm_vec(
                 coord_face_nodes[0], coord_face_nodes[1], centroid_adjacent_entity)
 
@@ -355,22 +377,22 @@ def MPFA_D(mesh_instance):
                 centroid_adjacent_entity - coord_face_nodes[1], coord_face_nodes[0] - coord_face_nodes[1])
             # print("B2Ob: ", centroid_adjacent_entity - coord_face_nodes[1])
             # print("B2B1: ", coord_face_nodes[0] - coord_face_nodes[1])
-            B[v_ids[adjacent_entitites[0]]][0] += (
+            B[v_ids[adjacent_entities[0]]][0] += (
                 (K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node
             # print("aux_prod: ", aux_dot_product_first)
             # print("B1: ", ((K_n_B * aux_dot_product_first)/(h_B * module_face_normal) - K_t_B) * pressure_first_node)
             aux_dot_product_second = np.dot(
                 centroid_adjacent_entity - coord_face_nodes[0], coord_face_nodes[1] - coord_face_nodes[0])
-            B[v_ids[adjacent_entitites[0]]][0] += (
+            B[v_ids[adjacent_entities[0]]][0] += (
                 (K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node
             # print("B2: ", ((K_n_B * aux_dot_product_second)/(h_B * module_face_normal) + K_t_B) * pressure_second_node)
-            A[v_ids[adjacent_entitites[0]]][v_ids[adjacent_entitites[0]]] += K_n_B * module_face_normal/h_B
+            A[v_ids[adjacent_entities[0]]][v_ids[adjacent_entities[0]]] += K_n_B * module_face_normal/h_B
             #print("Dirich. coefic.: ", A, K_n_B * module_face_normal/h_B)
 
-        if face in intern_nodes:
+        if face in intern_faces:
 
-            first_volume = adjacent_entitites[0]
-            second_volume = adjacent_entitites[1]
+            first_volume = adjacent_entities[0]
+            second_volume = adjacent_entities[1]
 
             cent_first_volume = get_centroid([first_volume])
             cent_second_volume = get_centroid([second_volume])
@@ -467,13 +489,19 @@ def MPFA_D(mesh_instance):
                     A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
                     A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
 
+            if len(m_inst.all_pressure_well_vols) > 0:
+                for well_volume in m_inst.all_pressure_well_vols:
+                    well_pressure = mb.tag_get_data(m_inst.pressure_well_tag, well_volume)
+                    A[v_ids[well_volume], :] = 0
+                    A[v_ids[well_volume]][v_ids[well_volume]] = 1.0
+                    B[v_ids[well_volume]][0] = well_pressure
         # print("Calculou face ", count, " de ", len(all_faces))
         count = count + 1
 
     print(A)
     print(B)
     volume_pressures = np.linalg.solve(A, B)
-    # print(volume_pressures)
+    print(volume_pressures)
     mb.tag_set_data(pressure_tag, all_volumes, volume_pressures.flatten())
     mb.write_file("pressure_field.vtk")
     return volume_pressures

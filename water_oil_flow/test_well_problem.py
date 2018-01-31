@@ -19,7 +19,7 @@ mesh_data.bound_condition_values("neumann")
 #mesh_data.bound_condition_values("dirichlet")
 
 # Appends well sorce term to mesh volumes
-mesh_data.well_condition(wells_coords, wells_src_terms)
+mesh_data.well_condition(wells_infos, wells_src_terms)
 
 # Appends more data, such as hanging nodes and conform edges for adaptation process,
 # as well as permeability tensor, to each 2D element on mesh
@@ -35,7 +35,7 @@ node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
 pressure_gradient = pressure_solver.pressure_grad(mesh_data)
 # print("Pressure gradient: ", pressure_gradient)
 #Saves mesh data to a file
-mesh_data.mb.write_file("testing_object.vtk")
+mesh_data.mb.write_file("test_well_problem.vtk")
 
 # Testing node pressures to linear problem
 all_nodes = mesh_data.all_nodes
