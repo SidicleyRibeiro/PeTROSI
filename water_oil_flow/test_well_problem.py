@@ -8,8 +8,8 @@ mesh_file = "geometry_well_test.msh"
 boundary_conditions = {"neumann": {201:0.0}}
 
 # Sets well(s) conditions
-wells_infos = [{"Pressure_Well": np.array([0.0, 0.0, 0.0])},
-                {"Flow_Rate_Well": np.array([1.0, 1.0, 0.0])}]
+wells_infos = [{"Flow_Rate_Well": np.array([0.0, 0.0, 0.0])},
+                {"Pressure_Well": np.array([1.0, 1.0, 0.0])}]
 wells_src_terms = [1.0, 1.0]
 
 # Instanciates "Mesh_Manager" with mesh file and boundary conditions
@@ -52,3 +52,6 @@ all_volumes = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 2)
 for i in range(len(all_volumes)):
     coords_vol = mesh_data.get_centroid(all_volumes[i])
     print("Val: ", coords_vol, pressure_field[i])
+
+
+print("NUMERO ELEMENTOS: ", len(mesh_data.all_volumes))

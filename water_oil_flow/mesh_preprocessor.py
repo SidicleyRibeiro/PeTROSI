@@ -95,34 +95,38 @@ class Mesh_Manager:
                 for tag in self.physical_sets:
                     tag_id = self.mb.tag_get_data(
                         self.physical_tag, np.array([tag]), flat=True)
-                    entity_set = self.mb.get_entities_by_handle(tag, True)
 
                     if tag_id == id_:
+                        entity_set = self.mb.get_entities_by_handle(tag, True)
 
-                        for ent in entity_set:
-                            if i_type == "permeability":
-                                self.mb_tag_set_data(self.perm_tag, ent, [ids_values[id_]])
-                                break
+                        if i_type == "permeability":
+                            for ent in entity_set:
+                                self.mb.tag_set_data(
+                                    self.perm_tag, ent, [ids_values[id_]])
+                            break
 
-                            nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
-
-                            if i_type == "dirichlet":
+                        if i_type == "dirichlet":
+                            for ent in entity_set:
+                                nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
                                 self.dirich_faces = self.dirich_faces | set([ent])
                                 self.dirich_nodes = self.dirich_nodes | set(nodes)
 
                                 self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
                                 self.mb.tag_set_data(
                                     self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
-                                break
+                            break
 
-                            if i_type == "neumann":
+                        if i_type == "neumann":
+                            for ent in entity_set:
+                                nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
                                 self.neu_faces = self.neu_faces | set([ent])
                                 self.neu_nodes = self.neu_nodes | set(nodes)
 
                                 self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
                                 self.mb.tag_set_data(
                                     self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
-                                break
+                            break
+
 
     @staticmethod
     def point_distance(coords_1, coords_2):
@@ -338,4 +342,3 @@ class Mesh_Manager:
             full_edge_meshset = self.mb.create_meshset()
             self.mb.add_entities(full_edge_meshset, full_edges)
             self.mb.tag_set_data(self.full_edges_tag, ent, full_edge_meshset)
-            # print("TAG_PERM: ", self.permeability(self.get_centroid(ent)))

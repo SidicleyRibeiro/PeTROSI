@@ -9,9 +9,9 @@ Line(4) = {3, 4};
 Line Loop(5) = {4, 1, 2, 3};
 Plane Surface(6) = {5};
 
-Transfinite Line {1, 2} = 4;
-Transfinite Line {3, 4} = 4;
-Transfinite Surface {6} = {1, 2, 3, 4};
+Transfinite Line {1, 2} = 16;
+Transfinite Line {3, 4} = 16;
+//Transfinite Surface {6} = {1, 2, 3, 4};
 Recombine Surface {6};
 
 Physical Point(101) = {2, 3};
@@ -21,8 +21,4 @@ Physical Line(201) = {4, 2};
 Physical Line(101) = {3};
 Physical Line(102) = {1};
 
-
 Physical Surface(1) = {6};
-//Transfinite Line {4} = 10 Using Progression 1;
-//Transfinite Line {1, 2, 3} = 10 Using Progression 1;
-Coherence;

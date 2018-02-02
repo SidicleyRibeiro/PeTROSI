@@ -1,18 +1,26 @@
 import mesh_preprocessor
 import pressure_solver
 import numpy as np
+# import matplotlib.pyplot as plt
 # Defines mesh file
-mesh_file = "geometry_test.msh"
-
-# Sets boundary conditions with correspondant values to tags defined on mesh file
-boundary_conditions = {"dirichlet":{101:0.0, 102:1.0}, "neumann": {201:0.0}}
+mesh_file = "geometry_horizontal_layers.msh"
 
 # Instanciates "Mesh_Manager" with mesh file and boundary conditions
 
-mesh_data = mesh_preprocessor.Mesh_Manager(mesh_file, boundary_conditions)
-# Appends boundary condition values to mesh data
-mesh_data.bound_condition_values("neumann")
-mesh_data.bound_condition_values("dirichlet")
+mesh_data = mesh_preprocessor.Mesh_Manager(mesh_file)
+
+# Sets mesh information with correspondant values to tags defined on mesh file
+
+K_1 = np.array([2.0, 0.0, 0.0,
+                0.0, 2.0, 0.0,
+                0.0, 0.0, 2.0])
+
+K_2 = np.array([1.0, 0.0, 0.0,
+                0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0])
+
+mesh_info = {"permeability":{1:K_1, 2:K_2}, "dirichlet":{101:0.0, 102:1.0}, "neumann": {201:0.0}}
+mesh_data.mesh_problem_info(mesh_info)
 
 # Appends more data, such as hanging nodes and conform edges for adaptation process,
 # as well as permeability tensor, to each 2D element on mesh
@@ -26,24 +34,29 @@ node_pressures = pressure_solver.get_nodes_pressures(mesh_data)
 
 #Calculates pressure gradient field
 pressure_gradient = pressure_solver.pressure_grad(mesh_data)
-print("Pressure gradient: ", pressure_gradient)
+# print("Pressure gradient: ", pressure_gradient)
 #Saves mesh data to a file
 mesh_data.mb.write_file("test_linear_problem.vtk")
 
+print("NUMERO ELEMENTOS: ", len(mesh_data.all_volumes))
+
 # Testing node pressures to linear problem
 all_nodes = mesh_data.all_nodes
+file_coord_node = open('for_node_coord_plot.txt', 'w')
+file_pressure_node = open('for_node_pressure_plot.txt', 'w')
 for node in all_nodes:
     coord = mesh_data.mb.get_coords([node])
-    print("NODE Val: ", 1.0 - coord[0], node_pressures[node], (
-            1.0 - coord[0]) - node_pressures[node])
+    file_coord_node.write('{0}\n'.format(coord[0]))
+    file_pressure_node.write('{0}\n'.format(node_pressures[node][0][0]))
+file_coord_node.close()
+file_pressure_node.close()
 
-# print(len(mesh_data.all_nodes))
-# mesh_data.mb.create_vertices(np.array([0.5, 0.5, 0.0]))
-# print("Teste quant: ", len(mesh_data.all_nodes), len(mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 0)))
-
-# Testing centroid pressures to linear problem
 all_volumes = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 2)
+file_coord_elem = open('for_element_coord_plot.txt', 'w')
+file_pressure_elem = open('for_element_pressure_plot.txt', 'w')
 for i in range(len(all_volumes)):
     coord_x = mesh_data.get_centroid(all_volumes[i])[0]
-    print("Val: ", 1.0 - coord_x, pressure_field[i], (
-1.0 - coord_x) - pressure_field[i])
+    file_coord_elem.write('{0}\n'.format(coord_x))
+    file_pressure_elem.write('{0}\n'.format(pressure_field[i][0]))
+file_coord_elem.close()
+file_pressure_elem.close()

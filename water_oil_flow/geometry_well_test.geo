@@ -9,12 +9,12 @@ Line(4) = {3, 4};
 Line Loop(5) = {4, 1, 2, 3};
 Plane Surface(6) = {5};
 
-Transfinite Line {1, 2, 3} = 2;
-Transfinite Line {4} = 5;
+Transfinite Line {1, 2} = 16;
+Transfinite Line {3, 4} = 16;
 //Transfinite Surface {6} = {1, 2, 3, 4};
-//Recombine Surface {6};
+Recombine Surface {6};
 
-Physical Poit(201) = {1, 2, 3, 4};
+Physical Point(201) = {1, 2, 3, 4};
 //Physical Point(101) = {2, 3};
 //Physical Point(102) = {1, 4};
 
