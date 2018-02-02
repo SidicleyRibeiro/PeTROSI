@@ -13,6 +13,10 @@ hence, it only deals with monophase flow.
 
 It is used the PYMOAB package to manage the topology of meshes. Further will be used the PYTRILLINOS to the solver.
 
+# Trivia
+
+"Petrosi" is the plural of the latin term "petrosum", which means "rocky place".
+
 # To-do list:
 
 - Add wells;
