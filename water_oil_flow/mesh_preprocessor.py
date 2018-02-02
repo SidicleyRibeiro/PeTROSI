@@ -9,14 +9,13 @@ from pymoab import topo_util
 class Mesh_Manager:
 
 
-    def __init__(self, mesh_file, b_conditions):
+    def __init__(self, mesh_file):
 
         self.mb = core.Core()
         self.root_set = self.mb.get_root_set()
         self.mtu = topo_util.MeshTopoUtil(self.mb)
 
         self.mb.load_file(mesh_file)
-        self.b_conditions = b_conditions
 
         self.physical_tag = self.mb.tag_get_handle("MATERIAL_SET")
         self.physical_sets = self.mb.get_entities_by_type_and_tag(
@@ -85,35 +84,45 @@ class Mesh_Manager:
         return new_volume
 
 
-    def bound_condition_values(self, b_condition_type):
-        ids_values = self.b_conditions[b_condition_type]
-        ids = list(ids_values.keys())
+    def mesh_problem_info(self, mesh_info):
+        info_types = list(mesh_info.keys())
+        all_ids_values = list(mesh_info.values())
 
-        for id_ in ids:
-            for tag in self.physical_sets:
-                tag_id = self.mb.tag_get_data(
-                    self.physical_tag, np.array([tag]), flat=True)
-                entity_set = self.mb.get_entities_by_handle(tag, True)
+        for i_type, ids_values  in zip(info_types, all_ids_values):
+            ids = list(ids_values.keys())
 
-                if tag_id == id_:
-                    for ent in entity_set:
-                        nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
+            for id_ in ids:
+                for tag in self.physical_sets:
+                    tag_id = self.mb.tag_get_data(
+                        self.physical_tag, np.array([tag]), flat=True)
+                    entity_set = self.mb.get_entities_by_handle(tag, True)
 
-                        if b_condition_type == "dirichlet":
-                            self.dirich_faces = self.dirich_faces | set([ent])
-                            self.dirich_nodes = self.dirich_nodes | set(nodes)
+                    if tag_id == id_:
 
-                            self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
-                            self.mb.tag_set_data(
-                                self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                        for ent in entity_set:
+                            if i_type == "permeability":
+                                self.mb_tag_set_data(self.perm_tag, ent, [ids_values[id_]])
+                                break
 
-                        if b_condition_type == "neumann":
-                            self.neu_faces = self.neu_faces | set([ent])
-                            self.neu_nodes = self.neu_nodes | set(nodes)
+                            nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
 
-                            self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
-                            self.mb.tag_set_data(
-                                self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                            if i_type == "dirichlet":
+                                self.dirich_faces = self.dirich_faces | set([ent])
+                                self.dirich_nodes = self.dirich_nodes | set(nodes)
+
+                                self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
+                                self.mb.tag_set_data(
+                                    self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                                break
+
+                            if i_type == "neumann":
+                                self.neu_faces = self.neu_faces | set([ent])
+                                self.neu_nodes = self.neu_nodes | set(nodes)
+
+                                self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
+                                self.mb.tag_set_data(
+                                    self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
+                                break
 
     @staticmethod
     def point_distance(coords_1, coords_2):
@@ -321,15 +330,6 @@ class Mesh_Manager:
         # centroide = wgtd_cent/total_area
         return pseudo_cent
 
-
-    @staticmethod
-    def permeability(block_coords):
-        perm_tensor = [1.0, 0.0, 0.0,
-                        0.0, 1.0, 0.0,
-                        0.0, 0.0, 1.0]
-        return perm_tensor
-
-
     def all_hanging_nodes_full_edges(self):
 
         for ent in self.all_volumes:
@@ -338,5 +338,4 @@ class Mesh_Manager:
             full_edge_meshset = self.mb.create_meshset()
             self.mb.add_entities(full_edge_meshset, full_edges)
             self.mb.tag_set_data(self.full_edges_tag, ent, full_edge_meshset)
-            self.mb.tag_set_data(self.perm_tag, ent, self.permeability(self.get_centroid(ent)))
-            print("TAG_PERM: ", self.permeability(self.get_centroid(ent)))
+            # print("TAG_PERM: ", self.permeability(self.get_centroid(ent)))

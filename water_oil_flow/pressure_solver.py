@@ -317,17 +317,6 @@ def MPFA_D(mesh_instance):
     A = np.zeros([len(all_volumes), len(all_volumes)])
     B = np.zeros([len(all_volumes), 1])
 
-    perto = mtu.get_bridge_adjacencies(2305843009213693954, 1, 2)
-    print("TESTE CENTROIDE: ", get_centroid(2305843009213693954))
-    nodes = mb.get_adjacencies(2305843009213693954, 0)
-
-    coords = mb.get_coords(nodes).reshape([len(nodes), 3])
-    print("NODES TESTE: ", coords)
-    for pir in perto:
-        print("CENTROIDES: ", get_centroid(pir))
-    # for elem_teste in all_volumes:
-    #     print("ELEM TESTE:", elem_teste, get_centroid(elem_teste))
-
     for well_volume in m_inst.all_flow_rate_well_vols:
         # print("ALL WELLS: ", len(m_inst.all_well_volumes))
         print("WELL POS: ", get_centroid(well_volume), len(m_inst.all_flow_rate_well_vols))
