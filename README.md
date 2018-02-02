@@ -1,6 +1,6 @@
 
 
-# Multiphase flow in porous media
+# PeTROSI - Python mulTiphase ReservOir SImulator
 
 This simple code in Python aims to calculate the pressure and saturation fields of multiphase flow in porous media, 
 along with a mesh adaptation of type h. 
