@@ -135,7 +135,7 @@ class Mesh_Manager:
         return distance
 
 
-    def counterclock_sort(self, coords):
+    def _counterclock_sort(self, coords):
         inner_coord = sum(coords)/(len(coords))
         vectors = np.array(
             [crd_node - inner_coord for crd_node in coords])
@@ -152,7 +152,7 @@ class Mesh_Manager:
 
 
     @staticmethod
-    def contains(test_point, vol_sorted_coords):
+    def _contains(test_point, vol_sorted_coords):
         vects = np.array(
             [crd_node - test_point for crd_node in vol_sorted_coords])
         for i in range(len(vects)):
@@ -171,7 +171,7 @@ class Mesh_Manager:
         nodes = self.mb.get_adjacencies(element, 0)
         coords = self.mb.get_coords(nodes)
         coords = np.reshape(coords, (len(nodes), 3))
-        indices = self.counterclock_sort(coords)
+        indices = self._counterclock_sort(coords)
         coords = coords[indices]
         inter_coord = sum(coords)/len(coords)
         vectors_inside = [inter_coord - a_coord for a_coord in coords]
@@ -194,16 +194,16 @@ class Mesh_Manager:
                 connect_nodes_crds = np.reshape(
                     connect_nodes_crds, (len(connect_nodes), 3))
                 # print("coords: ", connect_nodes_crds)
-                indices = self.counterclock_sort(connect_nodes_crds)
+                indices = self._counterclock_sort(connect_nodes_crds)
                 # print("indices: ", indices)
                 connect_nodes_crds = connect_nodes_crds[indices]
                 connect_nodes = np.asarray(connect_nodes, dtype='uint64')
                 connect_nodes = connect_nodes[indices]
                 print("CONNECT_NODES: ", connect_nodes_crds, well_coords)
-                if self.contains(well_coords, connect_nodes_crds)[0] == -1:
+                if self._contains(well_coords, connect_nodes_crds)[0] == -1:
                     continue
 
-                if self.contains(well_coords, connect_nodes_crds)[0] == 1:
+                if self._contains(well_coords, connect_nodes_crds)[0] == 1:
 
                     if well_type == "Pressure_Well":
                         self.all_pressure_well_vols = np.append(
@@ -221,8 +221,8 @@ class Mesh_Manager:
                             self.flow_rate_well_tag, volume, np.asarray(well_value))
                         break
 
-                if self.contains(well_coords, connect_nodes_crds)[0] == 0:
-                    indice = self.contains(well_coords, connect_nodes_crds)[1]
+                if self._contains(well_coords, connect_nodes_crds)[0] == 0:
+                    indice = self._contains(well_coords, connect_nodes_crds)[1]
                     node = connect_nodes[indice]
                     node_coords = self.mb.get_coords([node])
                     adjacent_vols = self.mb.get_adjacencies(node, 2)
