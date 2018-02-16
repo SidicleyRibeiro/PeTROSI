@@ -3,7 +3,7 @@ import pressure_solver
 import numpy as np
 # import matplotlib.pyplot as plt
 # Defines mesh file
-mesh_file = "geometry_horizontal_layers.msh"
+mesh_file = "geometry_vertical_layers.msh"
 
 # Instanciates "Mesh_Manager" with mesh file and boundary conditions
 

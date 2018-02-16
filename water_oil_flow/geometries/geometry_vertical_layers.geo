@@ -20,13 +20,13 @@ Plane Surface(9) = {8};
 Line Loop(10) = {-3, 5, 6, 7};
 Plane Surface(11) = {10};
 
-Transfinite Line {1} = 16;
-Transfinite Line {2, 4} = 8;
+Transfinite Line {1} = 4;
+Transfinite Line {2, 4} = 3;
 //Transfinite Surface {9} = {1, 2, 5, 6};
 Recombine Surface {9};
 
-Transfinite Line {3, 6} = 16;
-Transfinite Line {5, 7} = 8;
+Transfinite Line {3, 6} = 4;
+Transfinite Line {5, 7} = 3;
 //Transfinite Surface {11} = {2, 3, 4, 5};
 Recombine Surface {11};
 
