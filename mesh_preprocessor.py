@@ -6,11 +6,12 @@ from pymoab import types
 from pymoab import topo_util
 
 
-class Mesh_Manager:
+class MeshManager:
 
 
-    def __init__(self, mesh_file):
+    def __init__(self, mesh_file, dim=3):
 
+        self.dimension = dim
         self.mb = core.Core()
         self.root_set = self.mb.get_root_set()
         self.mtu = topo_util.MeshTopoUtil(self.mb)
@@ -22,55 +23,50 @@ class Mesh_Manager:
             0, types.MBENTITYSET, np.array(
             (self.physical_tag,)), np.array((None,)))
 
-        self.pressure_tag = self.mb.tag_get_handle(
-            "pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
-
         self.dirichlet_tag = self.mb.tag_get_handle(
-            "dirichlet", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+            "Dirichlet", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
         self.neumann_tag = self.mb.tag_get_handle(
-            "neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+            "Neumann", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
         self.perm_tag = self.mb.tag_get_handle(
-            "PERM", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+            "Permeability", 9, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.pressure_grad_tag = self.mb.tag_get_handle(
-            "Pressure_Gradient", 3, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.pressure_grad_tag = self.mb.tag_get_handle(
+        #     "Pressure_Gradient", 3, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.pressure_well_tag = self.mb.tag_get_handle(
-            "Pressure_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.pressure_well_tag = self.mb.tag_get_handle(
+        #     "Pressure_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.flow_rate_well_tag = self.mb.tag_get_handle(
-            "Flow_Rate_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.flow_rate_well_tag = self.mb.tag_get_handle(
+        #     "Flow_Rate_Well_Condition", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.error_tag = self.mb.tag_get_handle(
-            "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.error_tag = self.mb.tag_get_handle(
+        #     "error", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.node_pressure_tag = self.mb.tag_get_handle(
-            "node_pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.node_pressure_tag = self.mb.tag_get_handle(
+        #     "node_pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.ref_degree_tag = self.mb.tag_get_handle(
-            "ref_degree", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+        # self.ref_degree_tag = self.mb.tag_get_handle(
+        #     "ref_degree", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
 
-        self.hanging_nodes_tag = self.mb.tag_get_handle(
-            "hanging_nodes", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
+        # self.hanging_nodes_tag = self.mb.tag_get_handle(
+        #     "hanging_nodes", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
-        self.full_edges_tag = self.mb.tag_get_handle(
-            "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
+        # self.full_edges_tag = self.mb.tag_get_handle(
+        #     "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
-        self.all_volumes = self.mb.get_entities_by_dimension(self.root_set, 2)
+        self.all_volumes = self.mb.get_entities_by_dimension(self.root_set, self.dimension)
 
         self.all_nodes = self.mb.get_entities_by_dimension(self.root_set, 0)
 
-        self.dirich_nodes = set()
-        self.neu_nodes = set()
+        self.mtu.construct_aentities(self.all_nodes)
 
-        self.dirich_faces = set()
-        self.neu_faces = set()
+        self.dirichlet_faces = set()
+        self.neumann_faces = set()
 
-        self.all_pressure_well_vols = np.asarray([], dtype='uint64')
-        self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
-
+        # self.all_pressure_well_vols = np.asarray([], dtype='uint64')
+        # self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
 
     def create_vertices(self, coords):
         new_vertices = self.mb.create_vertices(coords)
@@ -83,49 +79,46 @@ class Mesh_Manager:
         self.all_volumes.append(new_element)
         return new_volume
 
+    def set_information(self, information_name, physicals_values,
+                              dim_target, set_connect=False):
 
-    def mesh_problem_info(self, mesh_info):
-        info_types = list(mesh_info.keys())
-        all_ids_values = list(mesh_info.values())
+        information_tag = self.mb.tag_get_handle(information_name)
+        for physical, value in physicals_values.items():
+            for a_set in self.physical_sets:
+                physical_group = self.mb.tag_get_data(self.physical_tag, a_set, flat=True)
 
-        for i_type, ids_values  in zip(info_types, all_ids_values):
-            ids = list(ids_values.keys())
+                if physical_group == physical:
+                    group_elements = self.mb.get_entities_by_dimension(a_set, dim_target)
 
-            for id_ in ids:
-                for tag in self.physical_sets:
-                    tag_id = self.mb.tag_get_data(
-                        self.physical_tag, np.array([tag]), flat=True)
+                    if information_name == 'Dirichlet':
+                        # print('DIR GROUP', len(group_elements), group_elements)
+                        self.dirichlet_faces = self.dirichlet_faces | set(group_elements)
 
-                    if tag_id == id_:
-                        entity_set = self.mb.get_entities_by_handle(tag, True)
+                    if information_name == 'Neumann':
+                        # print('NEU GROUP', len(group_elements), group_elements)
+                        self.neumann_faces = self.neumann_faces | set(group_elements)
 
-                        if i_type == "permeability":
-                            for ent in entity_set:
-                                self.mb.tag_set_data(
-                                    self.perm_tag, ent, [ids_values[id_]])
-                            break
+                    for element in group_elements:
+                        self.mb.tag_set_data(information_tag, element, value)
 
-                        if i_type == "dirichlet":
-                            for ent in entity_set:
-                                nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
-                                self.dirich_faces = self.dirich_faces | set([ent])
-                                self.dirich_nodes = self.dirich_nodes | set(nodes)
+                        if set_connect:
+                            connectivities = self.mtu.get_bridge_adjacencies(element, 0, 0)
+                            self.mb.tag_set_data(
+                                information_tag, connectivities, np.repeat(value, len(connectivities)))
 
-                                self.mb.tag_set_data(self.dirichlet_tag, ent, [ids_values[id_]])
-                                self.mb.tag_set_data(
-                                    self.dirichlet_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
-                            break
+        # self.mb.write_file('algo_ahora.vtk')
 
-                        if i_type == "neumann":
-                            for ent in entity_set:
-                                nodes = self.mtu.get_bridge_adjacencies(ent, 0, 0)
-                                self.neu_faces = self.neu_faces | set([ent])
-                                self.neu_nodes = self.neu_nodes | set(nodes)
+    def set_media_property(self, property_name, physicals_values,
+                                 dim_target=3, set_nodes=False):
 
-                                self.mb.tag_set_data(self.neumann_tag, ent, [ids_values[id_]])
-                                self.mb.tag_set_data(
-                                    self.neumann_tag, nodes, np.repeat([ids_values[id_]], len(nodes)))
-                            break
+        self.set_information(property_name, physicals_values,
+                             dim_target, set_connect=set_nodes)
+
+    def set_boundary_condition(self, boundary_condition, physicals_values,
+                                     dim_target=3, set_nodes=False):
+
+        self.set_information(boundary_condition, physicals_values,
+                             dim_target, set_connect=set_nodes)
 
 
     @staticmethod
