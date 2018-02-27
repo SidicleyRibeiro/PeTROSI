@@ -65,8 +65,8 @@ class MeshManager:
         self.dirichlet_faces = set()
         self.neumann_faces = set()
 
-        # self.all_pressure_well_vols = np.asarray([], dtype='uint64')
-        # self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
+        self.all_pressure_well_vols = np.asarray([], dtype='uint64')
+        self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
 
     def create_vertices(self, coords):
         new_vertices = self.mb.create_vertices(coords)
