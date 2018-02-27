@@ -24,15 +24,6 @@ class PressureSolverTest(unittest.TestCase):
                                            dim_target=1, set_nodes=True)
         self.mpfad_1 = MpfaD2D(self.mesh_1)
 
-    # def test_linear_problem_mesh_1(self):
-    #     self.mpfad_1.run_solver(self.mesh_1)
-    #     for a_volume in self.mesh_1.all_volumes:
-    #         local_pressure = self.mesh_1.mb.tag_get_data(
-    #                          self.mpfad_1.pressure_tag, a_volume)
-    #         coord_x = self.mesh_1.get_centroid(a_volume)[0]
-    #         self.assertAlmostEqual(
-    #             local_pressure[0][0], 1 - coord_x, delta=1e-10)
-
     def test_if_method_has_all_dirichlet_nodes(self):
         self.assertEqual(len(self.mpfad_1.dirichlet_nodes), 8)
 
