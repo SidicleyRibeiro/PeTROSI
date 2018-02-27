@@ -8,7 +8,6 @@ from pymoab import topo_util
 
 class MeshManager:
 
-
     def __init__(self, mesh_file, dim=3):
 
         self.dimension = dim
@@ -56,7 +55,8 @@ class MeshManager:
         # self.full_edges_tag = self.mb.tag_get_handle(
         #     "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
-        self.all_volumes = self.mb.get_entities_by_dimension(self.root_set, self.dimension)
+        self.all_volumes = \
+            self.mb.get_entities_by_dimension(self.root_set, self.dimension)
 
         self.all_nodes = self.mb.get_entities_by_dimension(self.root_set, 0)
 
