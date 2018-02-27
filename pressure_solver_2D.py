@@ -31,9 +31,9 @@ class MpfaD2D:
         self.dirichlet_faces = mesh_data.dirichlet_faces
         self.neumann_faces = mesh_data.neumann_faces
 
-        self.all_faces = self.mb.get_entities_by_dimension(0, 2)
+        self.all_faces = mesh_data.all_faces
         boundary_faces = (self.dirichlet_faces | self.neumann_faces)
-        # print('ALL FACES', all_faces, len(all_faces))
+        print('ALL FACES', self.all_faces, len(self.all_faces))
         self.intern_faces = set(self.all_faces) - boundary_faces
 
         self.volumes = self.mesh_data.all_volumes

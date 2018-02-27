@@ -56,12 +56,12 @@ class MeshManager:
         #     "full_edges", 1, types.MB_TYPE_HANDLE, types.MB_TAG_SPARSE, True)
 
         self.all_volumes = \
-            self.mb.get_entities_by_dimension(self.root_set, self.dimension)
+            self.mb.get_entities_by_dimension(0, self.dimension)
 
         self.all_nodes = self.mb.get_entities_by_dimension(self.root_set, 0)
 
         self.mtu.construct_aentities(self.all_nodes)
-
+        self.all_faces = self.mb.get_entities_by_dimension(0, self.dimension-1)
         self.dirichlet_faces = set()
         self.neumann_faces = set()
 
@@ -99,6 +99,7 @@ class MeshManager:
                         self.neumann_faces = self.neumann_faces | set(group_elements)
 
                     for element in group_elements:
+
                         self.mb.tag_set_data(information_tag, element, value)
 
                         if set_connect:
