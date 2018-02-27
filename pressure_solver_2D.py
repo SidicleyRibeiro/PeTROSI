@@ -1,5 +1,6 @@
 # coding: utf-8
 from math import sqrt
+from pymoab import types
 import numpy as np
 
 
@@ -10,13 +11,42 @@ class MpfaD2D:
         self.mb = mesh_data.mb
         self.mtu = mesh_data.mtu
 
-    def norma(vector):
+        self.dirichlet_tag = mesh_data.dirichlet_tag
+        self.neumann_tag = mesh_data.neumann_tag
+        self.perm_tag = mesh_data.perm_tag
+
+        self.pressure_tag = self.mb.tag_get_handle(
+            "Pressure", 1, types.MB_TYPE_DOUBLE, types.MB_TAG_SPARSE, True)
+
+        self.dirichlet_nodes = set(self.mb.get_entities_by_type_and_tag(
+            0, types.MBVERTEX, self.dirichlet_tag, np.array((None,))))
+
+        self.neumann_nodes = set(self.mb.get_entities_by_type_and_tag(
+            0, types.MBVERTEX, self.neumann_tag, np.array((None,))))
+        self.neumann_nodes = self.neumann_nodes - self.dirichlet_nodes
+
+        boundary_nodes = (self.dirichlet_nodes | self.neumann_nodes)
+        self.intern_nodes = set(mesh_data.all_nodes) - boundary_nodes
+
+        self.dirichlet_faces = mesh_data.dirichlet_faces
+        self.neumann_faces = mesh_data.neumann_faces
+
+        self.all_faces = self.mb.get_entities_by_dimension(0, 2)
+        boundary_faces = (self.dirichlet_faces | self.neumann_faces)
+        # print('ALL FACES', all_faces, len(all_faces))
+        self.intern_faces = set(self.all_faces) - boundary_faces
+
+        self.volumes = self.mesh_data.all_volumes
+        self.A = np.zeros([len(self.volumes), len(self.volumes)])
+        self.b = np.zeros([1, len(self.volumes)])
+
+    def norma(self, vector):
         vector = np.array(vector)
         dot_product = np.dot(vector, vector)
         mag = sqrt(dot_product)
         return mag
 
-    def ang_vectors(u, v):
+    def ang_vectors(self, u, v):
         u = np.array(u)
         v = np.array(v)
         dot_product = np.dot(u,v)
@@ -33,7 +63,7 @@ class MpfaD2D:
         #print ang, arc, dot_product, norms, u, v
         return ang
 
-    def norm_vec(u, v, p):
+    def norm_vec(self, u, v, p):
         u = np.array(u)
         v = np.array(v)
         p = np.array(p)
@@ -47,12 +77,12 @@ class MpfaD2D:
 
         return Normal_vu
 
-    def count_wise(u, v, p):
+    def count_wise(self, u, v, p):
         normal_uv = norm_vec(u, v, p)
         uv = np.array([-normal_uv[1], normal_uv[0], normal_uv[2]])
         return uv
 
-    def area(u, v, p):
+    def area(self, u, v, p):
         #u = np.array(u)
         #v = np.array(v)
         #p = np.array(p)
@@ -66,13 +96,13 @@ class MpfaD2D:
         #print area, 'area', area == 0.0, re_sin, re_sin == 0.0, 're_sin'
         return area
 
-    def mid_point(p1, p2):
+    def mid_point(self, p1, p2):
         coords_p1 = mb.get_coords(p1)
         coords_p2 = mb.get_coords(p2)
         mid_p = (coords_p1 + coords_p2)/2.0
         return mid_p
 
-    def K_n_X(node_face_coords, entity_centroid, perm):
+    def K_n_X(self, node_face_coords, entity_centroid, perm):
         face_normal = norm_vec(
             node_face_coords[0], node_face_coords[1], entity_centroid)
 
@@ -83,7 +113,7 @@ class MpfaD2D:
         # print("K_n: ", K_n, K_n == 1.0)
         return K_n
 
-    def K_t_X(node_face_coords, entity_centroid, perm):
+    def K_t_X(self, node_face_coords, entity_centroid, perm):
         count_wise_face = count_wise(
             node_face_coords[0], node_face_coords[1], entity_centroid)
         face_normal = norm_vec(
@@ -94,7 +124,7 @@ class MpfaD2D:
         # print("K_t: ", K_t, K_t == 0.0)
         return K_t
 
-    def h_X(node_face_coords, entity_centroid, perm):
+    def h_X(self, node_face_coords, entity_centroid, perm):
         face_normal = norm_vec(node_face_coords[0], node_face_coords[1], entity_centroid)
         face_centroid = (node_face_coords[0] + node_face_coords[1])/2.0
         module_face_normal = sqrt(np.dot(face_normal, face_normal))
@@ -106,7 +136,7 @@ class MpfaD2D:
         return h
 
 
-    def face_weight(mb, mtu, get_centroid, interp_node, face, perm_tag):
+    def face_weight(self, mb, mtu, get_centroid, interp_node, face, perm_tag):
         coords_interp_node = mb.get_coords([interp_node])
         adjacent_volumes = mb.get_adjacencies(face, 2)
         half_face = mtu.get_average_position([face])
@@ -150,7 +180,7 @@ class MpfaD2D:
 
 
 
-    def partial_weight(mb, mtu, get_centroid, interp_node, adjacent_volume, perm_tag):
+    def partial_weight(self, mb, mtu, get_centroid, interp_node, adjacent_volume, perm_tag):
         coords_interp_node = mb.get_coords([interp_node])
         perm_adjacent_volume = mb.tag_get_data(perm_tag, adjacent_volume).reshape([3, 3])
         centroid_adjacent_volume = get_centroid(adjacent_volume)
@@ -194,7 +224,7 @@ class MpfaD2D:
         return node_weight
 
 
-    def neumann_boundary_weight(mb, mtu, get_centroid, neumann_node, neumann_tag, perm_tag):
+    def neumann_boundary_weight(self, mb, mtu, get_centroid, neumann_node, neumann_tag, perm_tag):
         adjacent_faces = mtu.get_bridge_adjacencies(neumann_node, 0, 1)
         #print len(face_adj)
         coords_neumann_node = mb.get_coords([neumann_node])
@@ -230,7 +260,7 @@ class MpfaD2D:
 
 
 
-    def explicit_weights(mb, mtu, get_centroid, interp_node, perm_tag):
+    def explicit_weights(self, mb, mtu, get_centroid, interp_node, perm_tag):
         adjacent_volumes = mtu.get_bridge_adjacencies(interp_node, 0, 2)
         weight_sum = 0
         weights = []
@@ -246,51 +276,28 @@ class MpfaD2D:
         return volumes_weights
 
 
-    def MPFA_D(mesh_instance):
-
-        m_inst = mesh_instance
-        mb = m_inst.mb
-        mtu = m_inst.mtu
-
-        perm_tag = m_inst.perm_tag
-        neumann_tag = m_inst.neumann_tag
-        dirichlet_tag = m_inst.dirichlet_tag
-        pressure_tag = m_inst.pressure_tag
-
-        get_centroid = m_inst.get_centroid
-
-        dirichlet_faces = m_inst.dirich_faces
-        neumann_faces = m_inst.neu_faces
-        all_faces = mb.get_entities_by_dimension(m_inst.root_set, 1)
-        intern_faces = set(all_faces) - (dirichlet_faces | neumann_faces)
-
-        dirichlet_nodes = m_inst.dirich_nodes
-        neumann_nodes = m_inst.neu_nodes - dirichlet_nodes
-        all_nodes = set(mb.get_entities_by_dimension(m_inst.root_set, 0))
-        intern_nodes = all_nodes - dirichlet_nodes - neumann_nodes
-
-        all_volumes = set(m_inst.all_volumes)
+    def run_solver(self, mesh_data):
 
         nodes_weights = {}
         ncount = 0
-        for intern_node in intern_nodes:
+        for intern_node in self.intern_nodes:
             intern_node_weight = explicit_weights(mb, mtu, get_centroid, intern_node, perm_tag)
             nodes_weights[intern_node] = intern_node_weight
-            # print("No ", ncount, " de", len(intern_nodes))
+            # print("No ", ncount, " de", len(self.intern_nodes))
             ncount = ncount + 1
             # print("Pesos: ", intern_node, mb.get_coords([intern_node]), nodes_weights)
         neumann_nodes_weights = {}
-        print("-------------------------------------------------------------------")
+        print("--------------------------------------------------------------")
         print("Calculou pesos de nos internos!")
-        print("-------------------------------------------------------------------")
+        print("--------------------------------------------------------------")
 
         for neumann_node in neumann_nodes:
             neumann_node_weight = explicit_weights(mb, mtu, get_centroid, neumann_node, perm_tag)
             neumann_nodes_weights[neumann_node] = neumann_node_weight
             # print("Neumann node:  ", mb.get_coords([neumann_node]))
-        print("-------------------------------------------------------------------")
+        print("--------------------------------------------------------------")
         print("Calculou pesos de nos em contorno de neumann!")
-        print("-------------------------------------------------------------------")
+        print("--------------------------------------------------------------")
 
         count = 0
         # if len(m_inst.all_pressure_well_vols) > 0:
@@ -317,7 +324,7 @@ class MpfaD2D:
         #             mb.tag_set_data(m_inst.dirichlet_tag, new_dirich_face, well_pressure)
         #
         #     neumann_nodes = neumann_nodes - dirichlet_nodes
-        #     intern_nodes = intern_nodes - dirichlet_nodes
+        #     self.intern_nodes = self.intern_nodes - dirichlet_nodes
 
         v_ids = dict(zip(all_volumes, np.arange(0, len(all_volumes))))
         A = np.zeros([len(all_volumes), len(all_volumes)])
@@ -444,7 +451,7 @@ class MpfaD2D:
                 # print("Linha seg para primo")
                 # print(A)
 
-                if face_nodes[0] in intern_nodes:
+                if face_nodes[0] in self.intern_nodes:
                     # print("No 1 volume 1: ", mb.get_coords([face_nodes[0]]), mb.get_coords([face_nodes[1]]), cent_first_volume)
                     for vol, weigh in nodes_weights[face_nodes[0]]:
                         A[v_ids[first_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
@@ -465,7 +472,7 @@ class MpfaD2D:
                         A[v_ids[second_volume]][v_ids[vol]] +=  K_transm * module_face_normal * D_ab * weigh
 
 
-                if face_nodes[1] in intern_nodes:
+                if face_nodes[1] in self.intern_nodes:
                     for vol, weigh in nodes_weights[face_nodes[1]]:
                         A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
                         A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
@@ -502,7 +509,7 @@ class MpfaD2D:
         return volume_pressures
 
 
-    def get_nodes_pressures(mesh_data):
+    def get_nodes_pressures(self, mesh_data):
 
         nodes_pressures = {}
         for node in mesh_data.all_nodes:
@@ -542,7 +549,7 @@ class MpfaD2D:
         return nodes_pressures
 
 
-    def pressure_grad(mesh_data):
+    def pressure_grad(self, mesh_data):
 
         all_faces = mesh_data.mb.get_entities_by_dimension(mesh_data.root_set, 1)
 
