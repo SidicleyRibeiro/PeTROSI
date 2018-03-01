@@ -24,25 +24,34 @@ class PressureSolverTest(unittest.TestCase):
         self.mesh_1.set_boundary_condition('Neumann', {201: 0.0},
                                            dim_target=1, set_nodes=True)
         self.mpfad_1 = MpfaD2D(self.mesh_1)
-        self.imd = InterpolMethod(self.mpfad_1)
+        self.imd_1 = InterpolMethod(self.mpfad_1)
 
-    def test_linear_problem_with_mesh_1(self):
-        self.mpfad_1.run_solver()
-        for a_volume in self.mesh_1.all_volumes:
-            local_pressure = self.mesh_1.mb.tag_get_data(
-                             self.mpfad_1.pressure_tag, a_volume)
-            coord_x = self.mesh_1.get_centroid(a_volume)[0]
+        self.mesh_2 = MeshManager('mesh_test_2.msh', dim=2)
+        self.mesh_2.set_media_property('Permeability', {1: K_1}, dim_target=2)
+        self.mesh_2.set_boundary_condition('Dirichlet', {102: 1.0, 101: 0.0},
+                                           dim_target=1, set_nodes=True)
+        self.mesh_2.set_boundary_condition('Neumann', {201: 0.0},
+                                           dim_target=1, set_nodes=True)
+        self.mpfad_2 = MpfaD2D(self.mesh_2)
+        self.imd_2 = InterpolMethod(self.mpfad_2)
+
+    def test_linear_problem_with_mesh_2(self):
+        self.mpfad_2.run_solver()
+        for a_volume in self.mesh_2.all_volumes:
+            local_pressure = self.mesh_2.mb.tag_get_data(
+                             self.mpfad_2.pressure_tag, a_volume)
+            coord_x = self.mesh_2.get_centroid(a_volume)[0]
             self.assertAlmostEqual(
-                local_pressure[0][0], 1 - coord_x, delta=1e-10)
+                local_pressure[0][0], 1 - coord_x, delta=1e-15)
 
     def test_lpew2_presents_equal_weights_for_equal_quads(self):
         all_nodes = self.mesh_1.all_nodes
         intern_nodes = np.asarray([all_nodes[12],
-                                 all_nodes[13],
-                                 all_nodes[14],
-                                 all_nodes[15]], dtype='uint64')
+                                   all_nodes[13],
+                                   all_nodes[14],
+                                   all_nodes[15]], dtype='uint64')
         # intern_nodes = all_nodes[[12, 13, 14, 15]]
         for a_node in intern_nodes:
-            node_weights = self.imd.by_lpew2(a_node)
+            node_weights = self.imd_1.by_lpew2(a_node)
             for volume, weight in node_weights.items():
-                self.assertAlmostEqual(weight, 0.25, delta=1e-10)
+                self.assertAlmostEqual(weight, 0.25, delta=1e-12)
