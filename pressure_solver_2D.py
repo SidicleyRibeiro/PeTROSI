@@ -118,15 +118,15 @@ class MpfaD2D:
         # print("K_t: ", K_t, K_t == 0.0)
         return K_t
 
-    def get_face_dist(self, node_face_coords, vol_centroid, perm):
-        face_normal = self.area_vector(node_face_coords[0], node_face_coords[1], vol_centroid)
-        face_centroid = (node_face_coords[0] + node_face_coords[1])/2.0
-        module_face_normal = sqrt(np.dot(face_normal, face_normal))
+    def get_face_dist(self, face_nodes, vol_cent, perm):
+        face_normal = self.area_vector(face_nodes[0], face_nodes[1], vol_cent)
+        face_centroid = (face_nodes[0] + face_nodes[1])/2.0
+        area_vector = sqrt(np.dot(face_normal, face_normal))
 
-        h = np.dot(face_normal, face_centroid - vol_centroid)/module_face_normal
+        h = np.dot(face_normal, face_centroid - vol_cent)/area_vector
         # print("h: ", h)
-        # print(node_face_coords)
-        # print(vol_centroid)
+        # print(face_nodes)
+        # print(vol_cent)
         return h
 
 
@@ -218,6 +218,7 @@ class MpfaD2D:
         return node_weight
 
 
+
     def neumann_weight(self, neumann_node):
         adjacent_faces = self.mtu.get_bridge_adjacencies(neumann_node, 0, 1)
         #print len(face_adj)
@@ -278,29 +279,33 @@ class MpfaD2D:
 
     def _get_nodes_weights(self, method):
         nodes_weights = {}
-        for a_node in self.intern_nodes:
+        for a_node in self.intern_nodes | self.neumann_nodes:
             nodes_weights[a_node] = method(a_node)
         return nodes_weights
 
-    def run_solver(self):
+    def _node_treatment(self, node, nodes_weights, id_1st, id_2nd, v_ids,
+                        transm, face_area, cross_term, is_2nd=1.0):
+        if node in self.dirichlet_nodes:
+            node_press = self.mb.tag_get_data(self.dirichlet_tag, node)
+            value = transm * face_area * cross_term * node_press[0][0]
+            self.B[id_1st][0] += value * is_2nd
+            self.B[id_2nd][0] += - value * is_2nd
 
+        if node in self.intern_nodes | self.neumann_nodes:
+            for vol, weight in nodes_weights[node].items():
+                value = transm * face_area * cross_term * weight
+                self.A[id_1st][v_ids[vol]] += - value * is_2nd
+                self.A[id_2nd][v_ids[vol]] += value * is_2nd
 
-        nodes_weights = {}
-        ncount = 0
-        for intern_node in self.intern_nodes:
-            intern_node_weight = self.explicit_weights(intern_node)
-            nodes_weights[intern_node] = intern_node_weight
-            # print("No ", ncount, " de", len(self.intern_nodes))
-            ncount = ncount + 1
-            # print("Pesos: ", intern_node, self.mb.get_coords([intern_node]), nodes_weights)
-        neumann_nodes_weights = {}
+        if node in self.neumann_nodes:
+            neumann_factor = self.neumann_weight(node)
+            value = transm * face_area * cross_term * (- neumann_factor)
+            self.B[id_1st][0] += value * is_2nd
+            self.B[id_2nd][0] += - value * is_2nd
 
-        for neumann_node in self.neumann_nodes:
-            node_weight = self.explicit_weights(neumann_node)
-            neumann_nodes_weights[neumann_node] = node_weight
-            # print("Neumann node:  ", self.mb.get_coords([neumann_node]))
+    def run_solver(self, method):
+        nodes_weights = self._get_nodes_weights(method)
 
-        count = 0
         # if len(self.mesh_data.all_pressure_well_vols) > 0:
         #     for well_volume in self.mesh_data.all_pressure_well_vols:
         #         well_pressure = self.mb.tag_get_data(self.mesh_data.pressure_well_tag, well_volume)
@@ -329,14 +334,13 @@ class MpfaD2D:
 
         v_ids = self.set_global_id()
 
-
         for well_volume in self.mesh_data.all_flow_rate_well_vols:
             # print("ALL WELLS: ", len(self.mesh_data.all_well_volumes))
             print("WELL POS: ", self.mesh_data.get_centroid(well_volume), len(self.mesh_data.all_flow_rate_well_vols))
             well_src_term = self.mb.tag_get_data(self.mesh_data.flow_rate_well_tag, well_volume)
             self.B[v_ids[well_volume]][0] += well_src_term
 
-        print("FACE COUNT: ", len(self.dirichlet_faces), len(self.neumann_faces), len(self.intern_faces))
+        # print("FACE COUNT: ", len(self.dirichlet_faces), len(self.neumann_faces), len(self.intern_faces))
         for face in self.all_faces:
             adjacent_entities = np.asarray(self.mb.get_adjacencies(face, 2), dtype='uint64')
             if face in self.neumann_faces:
@@ -423,73 +427,33 @@ class MpfaD2D:
                 #print('K_transm: ', K_transm)
                 face_normal = self.area_vector(
                     coord_face_nodes[0], coord_face_nodes[1], cent_first_volume)
-                module_face_normal = sqrt(np.dot(face_normal, face_normal))
+                face_area = sqrt(np.dot(face_normal, face_normal))
                 aux_dot_product = np.dot(
                     coord_face_nodes[1] - coord_face_nodes[0], cent_second_volume - cent_first_volume)
                 aux_K_term = (K_t_second * h_second / K_n_second) + (K_t_first * h_first / K_n_first)
 
                 D_ab = (
-                    aux_dot_product / module_face_normal**2) - (1/module_face_normal) * aux_K_term
-                # print("D_ab:", D_ab, cent_first_volume, cent_second_volume)
-                # print("mod: ", module_face_normal, cent_first_volume, cent_second_volume)
-                # print("A_antes: ")
-                # print(self.A)
-                self.A[v_ids[first_volume]][v_ids[first_volume]] += K_transm * module_face_normal
-                # print("self.A, mesmo vol:")
-                # print(self.A)
-                self.A[v_ids[first_volume]][v_ids[second_volume]] += - K_transm * module_face_normal
-                # print("V_ids: ", v_ids[first_volume], v_ids[second_volume])
-                # print(- K_transm * module_face_normal)
-                # print("Linha primo para seg")
-                # print(self.A)
-                self.A[v_ids[second_volume]][v_ids[second_volume]] +=  K_transm * module_face_normal
-                # print("Seg vol")
-                # print(self.A)
-                self.A[v_ids[second_volume]][v_ids[first_volume]] +=  - K_transm * module_face_normal
-                # print("V_ids: ", v_ids[first_volume], v_ids[second_volume])
-                # print(- K_transm * module_face_normal)
-                # print("Linha seg para primo")
-                # print(self.A)
+                    aux_dot_product / face_area**2) - (1/face_area) * aux_K_term
 
-                if face_nodes[0] in self.intern_nodes:
-                    # print("No 1 volume 1: ", self.mb.get_coords([face_nodes[0]]), self.mb.get_coords([face_nodes[1]]), cent_first_volume)
-                    for vol, weigh in nodes_weights[face_nodes[0]].items():
-                        self.A[v_ids[first_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
-                        self.A[v_ids[second_volume]][v_ids[vol]] +=  K_transm * module_face_normal * D_ab * weigh
-                        # print("Aval: ", K_transm * module_face_normal * D_ab * weigh, D_ab)
+                vol_id_1st = v_ids[first_volume]
+                vol_id_2nd = v_ids[second_volume]
 
-                elif face_nodes[0] in self.dirichlet_nodes:
-                    pressure_first_node = self.mb.tag_get_data(self.dirichlet_tag, face_nodes[0])
-                    self.B[v_ids[first_volume]][0] += K_transm * module_face_normal * D_ab * pressure_first_node[0][0]
-                    self.B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * pressure_first_node[0][0]
+                self.A[vol_id_1st][vol_id_1st] += K_transm * face_area
 
-                elif face_nodes[0] in self.neumann_nodes:
-                    neumann_node_factor = self.neumann_weight(face_nodes[0])
-                    self.B[v_ids[first_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    self.B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    for vol, weigh in neumann_nodes_weights[face_nodes[0]].items():
-                        self.A[v_ids[first_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
-                        self.A[v_ids[second_volume]][v_ids[vol]] +=  K_transm * module_face_normal * D_ab * weigh
+                self.A[vol_id_1st][vol_id_2nd] += - K_transm * face_area
+
+                self.A[vol_id_2nd][vol_id_2nd] +=  K_transm * face_area
+
+                self.A[vol_id_2nd][vol_id_1st] +=  - K_transm * face_area
 
 
-                if face_nodes[1] in self.intern_nodes:
-                    for vol, weigh in nodes_weights[face_nodes[1]].items():
-                        self.A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
-                        self.A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
+                self._node_treatment(face_nodes[0], nodes_weights, vol_id_1st,
+                                     vol_id_2nd, v_ids, K_transm,
+                                     face_area, D_ab)
 
-                elif face_nodes[1] in self.dirichlet_nodes:
-                    pressure_second_node = self.mb.tag_get_data(self.dirichlet_tag, face_nodes[1])
-                    self.B[v_ids[first_volume]][0] += - K_transm * module_face_normal * D_ab * pressure_second_node[0][0]
-                    self.B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * pressure_second_node[0][0]
-
-                elif face_nodes[1] in self.neumann_nodes:
-                    neumann_node_factor = self.neumann_weight(face_nodes[1])
-                    self.B[v_ids[first_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    self.B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    for vol, weigh in neumann_nodes_weights[face_nodes[1]].items():
-                        # print("Peso neumann: ", weigh, self.mb.get_coords([face_nodes[1]]), self.mesh_data.get_centroid(vol), self.mesh_data.get_centroid(first_volume), self.mesh_data.get_centroid(second_volume))
-                        self.A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
-                        self.A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
+                self._node_treatment(face_nodes[1], nodes_weights, vol_id_1st,
+                                     vol_id_2nd, v_ids, K_transm,
+                                     face_area, D_ab, is_2nd=-1)
 
                 if len(self.mesh_data.all_pressure_well_vols) > 0:
                     for well_volume in self.mesh_data.all_pressure_well_vols:
@@ -498,7 +462,6 @@ class MpfaD2D:
                         self.A[v_ids[well_volume]][v_ids[well_volume]] = 1.0
                         self.B[v_ids[well_volume]][0] = well_pressure
             # print("Calculou face ", count, " de ", len(self.all_faces))
-            count = count + 1
 
         print(self.A)
         print(self.B)
@@ -509,76 +472,79 @@ class MpfaD2D:
         return volume_pressures
 
 
-    def get_nodes_pressures(self, mesh_data):
-
-        nodes_pressures = {}
-        for node in self.all_nodes:
-
-            if node in mesh_data.dirich_nodes:
-                nodes_pressures[node] = self.mb.tag_get_data(self.dirichlet_tag, node)
-                self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
-                # print("Dirichlet nodes: ", self.mb.get_coords([node]))
-
-            if node in mesh_data.neu_nodes - mesh_data.dirich_nodes:
-                neumann_term = self.neumann_weight(node)
-                volume_weight = self.explicit_weights(node)
-                pressure_node = 0
-                for vol,  weight in volume_weight:
-                    vol_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, vol)
-                    pressure_node += vol_pressure * weight
-                nodes_pressures[node] = pressure_node - neumann_term
-                self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
-                # print("Neumann nodes: ", self.mb.get_coords([node]))
-
-            if node in set(self.all_nodes) - mesh_data.neu_nodes - mesh_data.dirich_nodes:
-                volume_weight = self.explicit_weights(node)
-                pressure_node = 0
-                for vol,  weight in volume_weight:
-                    vol_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, vol)
-                    pressure_node += vol_pressure * weight
-                nodes_pressures[node] = pressure_node
-                self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
-                # print("Intern nodes: ", self.mb.get_coords([node]))
-        self.mb.write_file("node_pressure_field.vtk")
-        return nodes_pressures
 
 
-    def pressure_grad(self, mesh_data):
 
-        self.all_faces = self.mb.get_entities_by_dimension(mesh_data.root_set, 1)
-
-        face_grad = {}
-        for face in self.all_faces:
-
-            node_I, node_J = self.mtu.get_bridge_adjacencies(face, 0, 0)
-            adjacent_volumes = self.mb.get_adjacencies(face, 2)
-
-            coords_I = self.mb.get_coords([node_I])
-            coords_J = self.mb.get_coords([node_J])
-
-            pressure_I = self.mb.tag_get_data(mesh_data.node_pressure_tag, node_I)
-            pressure_J = self.mb.tag_get_data(mesh_data.node_pressure_tag, node_J)
-
-            face_grad[face] = {}
-            for a_volume in adjacent_volumes:
-
-                volume_centroid = self.mesh_data.get_centroid(a_volume)
-                centroid_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, a_volume)
-
-                normal_IJ = self.area_vector(coords_I, coords_J, volume_centroid)
-                normal_JC = self.area_vector(coords_J, volume_centroid, coords_I)
-                normal_CI = self.area_vector(volume_centroid, coords_I, coords_J)
-
-                area_iter = self.mesh_data.get_centroid(coords_I, coords_J, volume_centroid)
-
-                grad_p = (-1/(2 * area_iter)) * (
-                        pressure_I * normal_JC +
-                        pressure_J * normal_CI +
-                        centroid_pressure * normal_IJ)
-
-                face_grad[face][a_volume] = grad_p
-
-        return face_grad
+    # def get_nodes_pressures(self, mesh_data):
+    #
+    #     nodes_pressures = {}
+    #     for node in self.all_nodes:
+    #
+    #         if node in mesh_data.dirich_nodes:
+    #             nodes_pressures[node] = self.mb.tag_get_data(self.dirichlet_tag, node)
+    #             self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
+    #             # print("Dirichlet nodes: ", self.mb.get_coords([node]))
+    #
+    #         if node in mesh_data.neu_nodes - mesh_data.dirich_nodes:
+    #             neumann_term = self.neumann_weight(node)
+    #             volume_weight = self.explicit_weights(node)
+    #             pressure_node = 0
+    #             for vol,  weight in volume_weight:
+    #                 vol_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, vol)
+    #                 pressure_node += vol_pressure * weight
+    #             nodes_pressures[node] = pressure_node - neumann_term
+    #             self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
+    #             # print("Neumann nodes: ", self.mb.get_coords([node]))
+    #
+    #         if node in set(self.all_nodes) - mesh_data.neu_nodes - mesh_data.dirich_nodes:
+    #             volume_weight = self.explicit_weights(node)
+    #             pressure_node = 0
+    #             for vol,  weight in volume_weight:
+    #                 vol_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, vol)
+    #                 pressure_node += vol_pressure * weight
+    #             nodes_pressures[node] = pressure_node
+    #             self.mb.tag_set_data(mesh_data.node_pressure_tag, node, nodes_pressures[node])
+    #             # print("Intern nodes: ", self.mb.get_coords([node]))
+    #     self.mb.write_file("node_pressure_field.vtk")
+    #     return nodes_pressures
+    #
+    #
+    # def pressure_grad(self, mesh_data):
+    #
+    #     self.all_faces = self.mb.get_entities_by_dimension(mesh_data.root_set, 1)
+    #
+    #     face_grad = {}
+    #     for face in self.all_faces:
+    #
+    #         node_I, node_J = self.mtu.get_bridge_adjacencies(face, 0, 0)
+    #         adjacent_volumes = self.mb.get_adjacencies(face, 2)
+    #
+    #         coords_I = self.mb.get_coords([node_I])
+    #         coords_J = self.mb.get_coords([node_J])
+    #
+    #         pressure_I = self.mb.tag_get_data(mesh_data.node_pressure_tag, node_I)
+    #         pressure_J = self.mb.tag_get_data(mesh_data.node_pressure_tag, node_J)
+    #
+    #         face_grad[face] = {}
+    #         for a_volume in adjacent_volumes:
+    #
+    #             volume_centroid = self.mesh_data.get_centroid(a_volume)
+    #             centroid_pressure = self.mb.tag_get_data(mesh_data.pressure_tag, a_volume)
+    #
+    #             normal_IJ = self.area_vector(coords_I, coords_J, volume_centroid)
+    #             normal_JC = self.area_vector(coords_J, volume_centroid, coords_I)
+    #             normal_CI = self.area_vector(volume_centroid, coords_I, coords_J)
+    #
+    #             area_iter = self.mesh_data.get_centroid(coords_I, coords_J, volume_centroid)
+    #
+    #             grad_p = (-1/(2 * area_iter)) * (
+    #                     pressure_I * normal_JC +
+    #                     pressure_J * normal_CI +
+    #                     centroid_pressure * normal_IJ)
+    #
+    #             face_grad[face][a_volume] = grad_p
+    #
+    #     return face_grad
 
 
 class InterpolMethod:
@@ -592,6 +558,16 @@ class InterpolMethod:
         flux_term = aux_2 / face_area
         return flux_term
 
+    def _get_neta(self, face, intern_node, cent_node, cent_adj_vol, vol_perm):
+        half_face_vect = cent_node - intern_node
+        half_face = sqrt(np.dot(half_face_vect, half_face_vect))
+
+        face_nodes = self.mb.get_adjacencies(face, 0)
+        face_nodes_crds = self.mb.get_coords(face_nodes).reshape([2, 3])
+        height = self.get_face_dist(face_nodes_crds, cent_adj_vol, vol_perm)
+
+        neta = half_face / height
+        return neta
 
     def _get_face_weight(self, interp_node, face):
         crds_node = self.mpfad.mb.get_coords([interp_node])
@@ -680,7 +656,7 @@ class InterpolMethod:
 
     def by_lpew2(self, node):
         # node = np.asarray([node], dtype='uint64')
-        print("NODE", node, self.mpfad.mesh_data.mb.get_coords([node]))
+        # print("NODE", node, self.mpfad.mesh_data.mb.get_coords([node]))
         vols_around = self.mpfad.mb.get_adjacencies([node], 2)
         weight_sum = 0.0
         weights = np.array([])
