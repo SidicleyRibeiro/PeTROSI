@@ -265,7 +265,7 @@ class MpfaD2D:
             # print("volumes: ", self.mb.get_coords([interp_node]), get_centroid(adjacent_volume))
         weights = weights / weight_sum
         # print("weights: ", weights, )
-        volumes_weights = [[vol, weigh] for vol, weigh in zip(adjacent_volumes, weights)]
+        volumes_weights = {vol: weigh for vol, weigh in zip(adjacent_volumes, weights)}
         # print("pesos: ", self.mb.get_coords([interp_node]), volumes_weights)
         return volumes_weights
 
@@ -453,7 +453,7 @@ class MpfaD2D:
 
                 if face_nodes[0] in self.intern_nodes:
                     # print("No 1 volume 1: ", self.mb.get_coords([face_nodes[0]]), self.mb.get_coords([face_nodes[1]]), cent_first_volume)
-                    for vol, weigh in nodes_weights[face_nodes[0]]:
+                    for vol, weigh in nodes_weights[face_nodes[0]].items():
                         self.A[v_ids[first_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
                         self.A[v_ids[second_volume]][v_ids[vol]] +=  K_transm * module_face_normal * D_ab * weigh
                         # print("Aval: ", K_transm * module_face_normal * D_ab * weigh, D_ab)
@@ -467,13 +467,13 @@ class MpfaD2D:
                     neumann_node_factor = self.neumann_weight(face_nodes[0])
                     self.B[v_ids[first_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                     self.B[v_ids[second_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    for vol, weigh in neumann_nodes_weights[face_nodes[0]]:
+                    for vol, weigh in neumann_nodes_weights[face_nodes[0]].items():
                         self.A[v_ids[first_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
                         self.A[v_ids[second_volume]][v_ids[vol]] +=  K_transm * module_face_normal * D_ab * weigh
 
 
                 if face_nodes[1] in self.intern_nodes:
-                    for vol, weigh in nodes_weights[face_nodes[1]]:
+                    for vol, weigh in nodes_weights[face_nodes[1]].items():
                         self.A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
                         self.A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
 
@@ -486,7 +486,7 @@ class MpfaD2D:
                     neumann_node_factor = self.neumann_weight(face_nodes[1])
                     self.B[v_ids[first_volume]][0] += - K_transm * module_face_normal * D_ab * (-neumann_node_factor)
                     self.B[v_ids[second_volume]][0] += K_transm * module_face_normal * D_ab * (-neumann_node_factor)
-                    for vol, weigh in neumann_nodes_weights[face_nodes[1]]:
+                    for vol, weigh in neumann_nodes_weights[face_nodes[1]].items():
                         # print("Peso neumann: ", weigh, self.mb.get_coords([face_nodes[1]]), self.mesh_data.get_centroid(vol), self.mesh_data.get_centroid(first_volume), self.mesh_data.get_centroid(second_volume))
                         self.A[v_ids[first_volume]][v_ids[vol]] += K_transm * module_face_normal * D_ab * weigh
                         self.A[v_ids[second_volume]][v_ids[vol]] += - K_transm * module_face_normal * D_ab * weigh
@@ -586,6 +586,12 @@ class InterpolMethod:
     def __init__(self, mpfad):
         self.mpfad = mpfad
 
+    def _flux_term(self, vector_1st, permeab, vector_2nd, face_area):
+        aux_1 = np.dot(vector_1st, permeab)
+        aux_2 = np.dot(aux_1, vector_2nd)
+        flux_term = aux_2 / face_area
+        return flux_term
+
 
     def _get_face_weight(self, interp_node, face):
         crds_node = self.mpfad.mb.get_coords([interp_node])
@@ -595,7 +601,7 @@ class InterpolMethod:
         csi_den = 0
         for adjacent_volume in adjacent_volumes:
             centroid_volume = self.mpfad.mesh_data.get_centroid(adjacent_volume)
-            perm_volume = self.mpfad.mb.tag_get_data(self.mpfad.perm_tag, adjacent_volume).reshape([3, 3])
+            perm_volume = self.mpfad.mesh_data.mb.tag_get_data(self.mpfad.perm_tag, adjacent_volume).reshape([3, 3])
 
             interp_node_adj_faces = set(self.mpfad.mtu.get_bridge_adjacencies(interp_node, 0, 1))
             adjacent_volume_adj_faces = set(self.mpfad.mtu.get_bridge_adjacencies(adjacent_volume, 1, 1))
@@ -673,6 +679,8 @@ class InterpolMethod:
         return node_weight
 
     def by_lpew2(self, node):
+        # node = np.asarray([node], dtype='uint64')
+        print("NODE", node, self.mpfad.mesh_data.mb.get_coords([node]))
         vols_around = self.mpfad.mb.get_adjacencies([node], 2)
         weight_sum = 0.0
         weights = np.array([])
