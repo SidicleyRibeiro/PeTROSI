@@ -253,23 +253,6 @@ class MpfaD2D:
         # print("Neumann term: ", neumann_term)
         return neumann_term
 
-
-
-    def explicit_weights(self, interp_node):
-        adjacent_volumes = self.mtu.get_bridge_adjacencies(interp_node, 0, 2)
-        weight_sum = 0
-        weights = []
-        for adjacent_volume in adjacent_volumes:
-            weight = self.partial_weight(interp_node, adjacent_volume)
-            weights.append(weight)
-            weight_sum += weight
-            # print("volumes: ", self.mb.get_coords([interp_node]), get_centroid(adjacent_volume))
-        weights = weights / weight_sum
-        # print("weights: ", weights, )
-        volumes_weights = {vol: weigh for vol, weigh in zip(adjacent_volumes, weights)}
-        # print("pesos: ", self.mb.get_coords([interp_node]), volumes_weights)
-        return volumes_weights
-
     def set_global_id(self):
         vol_ids = {}
         range_of_ids = range(len(self.all_volumes))
@@ -471,10 +454,6 @@ class MpfaD2D:
         self.mb.write_file("pressure_field.vtk")
         return volume_pressures
 
-
-
-
-
     # def get_nodes_pressures(self, mesh_data):
     #
     #     nodes_pressures = {}
@@ -561,11 +540,9 @@ class InterpolMethod:
     def _get_neta(self, face, intern_node, cent_node, cent_adj_vol, vol_perm):
         half_face_vect = cent_node - intern_node
         half_face = sqrt(np.dot(half_face_vect, half_face_vect))
-
-        face_nodes = self.mb.get_adjacencies(face, 0)
-        face_nodes_crds = self.mb.get_coords(face_nodes).reshape([2, 3])
-        height = self.get_face_dist(face_nodes_crds, cent_adj_vol, vol_perm)
-
+        face_nodes = self.mpfad.mb.get_adjacencies(face, 0)
+        face_nodes_crds = self.mpfad.mb.get_coords(face_nodes).reshape([2, 3])
+        height = self.mpfad.get_face_dist(face_nodes_crds, cent_adj_vol, vol_perm)
         neta = half_face / height
         return neta
 
@@ -611,7 +588,12 @@ class InterpolMethod:
         # print("csi: ", csi, crds_node, half_face)
         return csi
 
-    def _get_volume_weight(self, node, adjacent_volume):
+    def _get_dynamic_point(self, crds_node, other_node, dist_factor):
+        tan_vector = other_node - crds_node
+        dynamic_point = crds_node + dist_factor * tan_vector
+        return dynamic_point
+
+    def _get_volume_weight(self, node, adjacent_volume, dist_factor):
         crds_node = self.mpfad.mb.get_coords([node])
         perm_adjacent_volume = self.mpfad.mb.tag_get_data(self.mpfad.perm_tag, adjacent_volume).reshape([3, 3])
         cent_adj_vol = self.mpfad.mesh_data.get_centroid(adjacent_volume)
@@ -621,6 +603,9 @@ class InterpolMethod:
         first_face = adjacent_faces[0]
         second_face = adjacent_faces[1]
 
+        # half_first_face = self._get_dynamic_point(crds_node, crds_other_1st, dist_factor)
+        # half_second_face = self._get_dynamic_point(crds_node, crds_other_2nd, dist_factor)
+
         half_first_face = self.mpfad.mtu.get_average_position([first_face])
         half_second_face = self.mpfad.mtu.get_average_position([second_face])
 
@@ -629,39 +614,26 @@ class InterpolMethod:
         K_ni_second = self.mpfad._get_conormal_prod(np.asarray([crds_node, half_second_face]),
                             cent_adj_vol, perm_adjacent_volume)
 
-        nodes_first_face = self.mpfad.mb.get_adjacencies(first_face, 0)
-        nodes_second_face = self.mpfad.mb.get_adjacencies(second_face, 0)
+        neta_1st = self._get_neta(first_face, crds_node, half_first_face,
+                                    cent_adj_vol, perm_adjacent_volume)
+        neta_2nd = self._get_neta(second_face, crds_node, half_second_face,
+                                     cent_adj_vol, perm_adjacent_volume)
 
-        coords_nodes_first_face = self.mpfad.mb.get_coords(nodes_first_face).reshape([2, 3])
-        coords_nodes_second_face = self.mpfad.mb.get_coords(nodes_second_face).reshape([2, 3])
-
-        h_first = self.mpfad.get_face_dist(coords_nodes_first_face, cent_adj_vol, perm_adjacent_volume)
-        h_second = self.mpfad.get_face_dist(coords_nodes_second_face, cent_adj_vol, perm_adjacent_volume)
-
-        half_vect_first_face = half_first_face - crds_node
-        half_vect_second_node = half_second_face - crds_node
-
-        half_modsqrd_first_face = sqrt(np.dot(half_vect_first_face, half_vect_first_face))
-        half_modsqrd_second_face = sqrt(np.dot(half_vect_second_node, half_vect_second_node))
-
-        neta_first = half_modsqrd_first_face / h_first
-        neta_second = half_modsqrd_second_face / h_second
-        # print("netas: ", neta_first, neta_second, h_first, h_second, crds_node, cent_adj_vol)
         csi_first = self._get_face_weight(node, first_face)
         csi_second = self._get_face_weight(node, second_face)
 
-        node_weight = K_ni_first * neta_first * csi_first + K_ni_second * neta_second * csi_second
+        node_weight = K_ni_first * neta_1st * csi_first + K_ni_second * neta_2nd * csi_second
         # print("weight: ", node_weight, crds_node, cent_adj_vol)
         return node_weight
 
-    def by_lpew2(self, node):
+    def by_lpew2(self, node, dist_factor=0.5):
         # node = np.asarray([node], dtype='uint64')
         # print("NODE", node, self.mpfad.mesh_data.mb.get_coords([node]))
         vols_around = self.mpfad.mb.get_adjacencies([node], 2)
         weight_sum = 0.0
         weights = np.array([])
         for a_volume in vols_around:
-            weight = self._get_volume_weight(node, a_volume)
+            weight = self._get_volume_weight(node, a_volume, dist_factor)
             weights = np.append(weights, weight)
             weight_sum += weight
         weights = weights / weight_sum
