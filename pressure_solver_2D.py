@@ -537,15 +537,6 @@ class InterpolMethod:
         flux_term = aux_2 / face_area
         return flux_term
 
-    def _get_neta(self, face, intern_node, cent_node, cent_adj_vol, vol_perm):
-        half_face_vect = cent_node - intern_node
-        half_face = sqrt(np.dot(half_face_vect, half_face_vect))
-        face_nodes = self.mpfad.mb.get_adjacencies(face, 0)
-        face_nodes_crds = self.mpfad.mb.get_coords(face_nodes).reshape([2, 3])
-        height = self.mpfad.get_face_dist(face_nodes_crds, cent_adj_vol, vol_perm)
-        neta = half_face / height
-        return neta
-
     def _get_face_weight(self, interp_node, face):
         crds_node = self.mpfad.mb.get_coords([interp_node])
         adjacent_volumes = self.mpfad.mb.get_adjacencies(face, 2)
@@ -588,8 +579,21 @@ class InterpolMethod:
         # print("csi: ", csi, crds_node, half_face)
         return csi
 
-    def _get_dynamic_point(self, crds_node, other_node, dist_factor):
-        tan_vector = other_node - crds_node
+    def _get_neta(self, face, intern_node, cent_node, cent_adj_vol, vol_perm):
+        half_face_vect = cent_node - intern_node
+        half_face = sqrt(np.dot(half_face_vect, half_face_vect))
+        face_nodes = self.mpfad.mb.get_adjacencies(face, 0)
+        face_nodes_crds = self.mpfad.mb.get_coords(face_nodes).reshape([2, 3])
+        height = self.mpfad.get_face_dist(face_nodes_crds, cent_adj_vol, vol_perm)
+        neta = half_face / height
+        return neta
+
+    def _get_dynamic_point(self, crds_node, node, face, dist_factor):
+        face_nodes = self.mpfad.mb.get_adjacencies(face, 0)
+        face_nodes = np.asarray(face_nodes, dtype='uint64')
+        other_node = face_nodes[face_nodes != node]
+        other_crds = self.mpfad.mb.get_coords(other_node)
+        tan_vector = other_crds - crds_node
         dynamic_point = crds_node + dist_factor * tan_vector
         return dynamic_point
 
@@ -603,20 +607,23 @@ class InterpolMethod:
         first_face = adjacent_faces[0]
         second_face = adjacent_faces[1]
 
-        # half_first_face = self._get_dynamic_point(crds_node, crds_other_1st, dist_factor)
-        # half_second_face = self._get_dynamic_point(crds_node, crds_other_2nd, dist_factor)
+        dyn_point_1st = self._get_dynamic_point(crds_node,
+                                                  node,
+                                                  first_face,
+                                                  dist_factor)
+        dyn_point_2nd = self._get_dynamic_point(crds_node,
+                                                   node,
+                                                   second_face,
+                                                   dist_factor)
 
-        half_first_face = self.mpfad.mtu.get_average_position([first_face])
-        half_second_face = self.mpfad.mtu.get_average_position([second_face])
-
-        K_ni_first = self.mpfad._get_conormal_prod(np.asarray([crds_node, half_first_face]),
+        K_ni_first = self.mpfad._get_conormal_prod(np.asarray([crds_node, dyn_point_1st]),
                            cent_adj_vol, perm_adjacent_volume)
-        K_ni_second = self.mpfad._get_conormal_prod(np.asarray([crds_node, half_second_face]),
+        K_ni_second = self.mpfad._get_conormal_prod(np.asarray([crds_node, dyn_point_2nd]),
                             cent_adj_vol, perm_adjacent_volume)
 
-        neta_1st = self._get_neta(first_face, crds_node, half_first_face,
+        neta_1st = self._get_neta(first_face, crds_node, dyn_point_1st,
                                     cent_adj_vol, perm_adjacent_volume)
-        neta_2nd = self._get_neta(second_face, crds_node, half_second_face,
+        neta_2nd = self._get_neta(second_face, crds_node, dyn_point_2nd,
                                      cent_adj_vol, perm_adjacent_volume)
 
         csi_first = self._get_face_weight(node, first_face)
