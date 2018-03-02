@@ -36,7 +36,7 @@ class PressureSolverTest(unittest.TestCase):
         self.imd_2 = InterpolMethod(self.mpfad_2)
 
     def test_linear_problem_with_mesh_2(self):
-        self.mpfad_2.run_solver()
+        self.mpfad_2.run_solver(self.imd_2.by_lpew2)
         for a_volume in self.mesh_2.all_volumes:
             local_pressure = self.mesh_2.mb.tag_get_data(
                              self.mpfad_2.pressure_tag, a_volume)
