@@ -36,7 +36,7 @@ class PressureSolverTest(unittest.TestCase):
         self.imd_2 = InterpolMethod(self.mpfad_2)
 
         self.mesh_3 = MeshManager('geometry_vertical_layers.msh', dim=2)
-        self.mesh_3.set_media_property('Permeability', {1: K_1, 2: K_2},
+        self.mesh_3.set_media_property('Permeability', {1: K_2, 2: K_1},
                                        dim_target=2)
         self.mesh_3.set_boundary_condition('Dirichlet', {102: 1.0, 101: 0.0},
                                            dim_target=1, set_nodes=True)
