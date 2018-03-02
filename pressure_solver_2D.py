@@ -528,8 +528,9 @@ class MpfaD2D:
 
 class InterpolMethod:
 
-    def __init__(self, mpfad):
+    def __init__(self, mpfad, dist_factor=0.5):
         self.mpfad = mpfad
+        self.dist_factor = dist_factor
 
     def _flux_term(self, vector_1st, permeab, vector_2nd, face_area):
         aux_1 = np.dot(vector_1st, permeab)
@@ -608,13 +609,13 @@ class InterpolMethod:
         second_face = adjacent_faces[1]
 
         dyn_point_1st = self._get_dynamic_point(crds_node,
-                                                  node,
-                                                  first_face,
-                                                  dist_factor)
+                                                node,
+                                                first_face,
+                                                dist_factor)
         dyn_point_2nd = self._get_dynamic_point(crds_node,
-                                                   node,
-                                                   second_face,
-                                                   dist_factor)
+                                                node,
+                                                second_face,
+                                                dist_factor)
 
         K_ni_first = self.mpfad._get_conormal_prod(np.asarray([crds_node, dyn_point_1st]),
                            cent_adj_vol, perm_adjacent_volume)
@@ -622,9 +623,9 @@ class InterpolMethod:
                             cent_adj_vol, perm_adjacent_volume)
 
         neta_1st = self._get_neta(first_face, crds_node, dyn_point_1st,
-                                    cent_adj_vol, perm_adjacent_volume)
+                                  cent_adj_vol, perm_adjacent_volume)
         neta_2nd = self._get_neta(second_face, crds_node, dyn_point_2nd,
-                                     cent_adj_vol, perm_adjacent_volume)
+                                  cent_adj_vol, perm_adjacent_volume)
 
         csi_first = self._get_face_weight(node, first_face)
         csi_second = self._get_face_weight(node, second_face)
@@ -633,14 +634,14 @@ class InterpolMethod:
         # print("weight: ", node_weight, crds_node, cent_adj_vol)
         return node_weight
 
-    def by_lpew2(self, node, dist_factor=0.5):
+    def by_lpew2(self, node):
         # node = np.asarray([node], dtype='uint64')
         # print("NODE", node, self.mpfad.mesh_data.mb.get_coords([node]))
         vols_around = self.mpfad.mb.get_adjacencies([node], 2)
         weight_sum = 0.0
         weights = np.array([])
         for a_volume in vols_around:
-            weight = self._get_volume_weight(node, a_volume, dist_factor)
+            weight = self._get_volume_weight(node, a_volume, self.dist_factor)
             weights = np.append(weights, weight)
             weight_sum += weight
         weights = weights / weight_sum
