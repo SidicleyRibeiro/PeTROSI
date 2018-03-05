@@ -68,19 +68,22 @@ class MeshManager:
         self.all_pressure_well_vols = np.asarray([], dtype='uint64')
         self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
 
-    def create_vertices(self, coords):
-        new_vertices = self.mb.create_vertices(coords)
-        self.all_nodes.append(new_vertices)
-        return new_vertices
+    def load_data(self):
+        neumann_ents_tag = self.mb.tag_get_handle('Neumann_entities')
+        neumann_ents_set = self.mb.tag_get_data(neumann_ents_tag, 0)
+        print("SET", neumann_ents_set)
+        neumann_faces = self.mb.get_entities_by_type(neumann_ents_set, types.MBEDGE)
+        self.neumann_faces = self.neumann_faces | set(neumann_faces)
 
-
-    def create_element(self, poly_type, vertices):
-        new_volume = self.mb.create_element(poly_type, vertices)
-        self.all_volumes.append(new_element)
-        return new_volume
+        dirichlet_ents_tag = self.mb.tag_get_handle('Dirichlet_entities')
+        dirichlet_ents_set = self.mb.tag_get_data(dirichlet_ents_tag, 0)
+        dirichlet_faces = self.mb.tag_get_data(dirichlet_ents_set, types.MBEDGE)
+        self.dirichlet_faces = self.dirichlet_faces | set(dirichlet_faces)
+        print('dir', len(self.dirichlet_faces))
+        # print("TODAS AS FACES: ", len(self.all_faces))
 
     def set_information(self, information_name, physicals_values,
-                              dim_target, set_connect=False):
+                        dim_target, set_connect=False):
 
         information_tag = self.mb.tag_get_handle(information_name)
         for physical, value in physicals_values.items():

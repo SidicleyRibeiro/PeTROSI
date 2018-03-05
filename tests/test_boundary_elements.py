@@ -24,6 +24,10 @@ class PressureSolverTest(unittest.TestCase):
                                            dim_target=1, set_nodes=True)
         self.mpfad_1 = MpfaD2D(self.mesh_1)
 
+        self.mesh_2 = MeshManager('mesh_nonconform_test.vtk', dim=2)
+        self.mesh_2.load_data()
+        self.mpfad_2 = MpfaD2D(self.mesh_2)
+
     def test_if_method_has_all_dirichlet_nodes(self):
         self.assertEqual(len(self.mpfad_1.dirichlet_nodes), 8)
 
@@ -44,3 +48,9 @@ class PressureSolverTest(unittest.TestCase):
 
     def test_if_method_has_all_intern_faces(self):
         self.assertEqual(len(self.mpfad_1.intern_faces), 12)
+
+    def test_load_data_neumann_from_vtk_with_usable_data_on_it(self):
+        self.assertEqual(len(self.mpfad_2.neumann_faces), 28)
+
+    def test_load_data_dirichlet_from_vtk_with_usable_data_on_it(self):
+        self.assertEqual(len(self.mpfad_2.dirichlet_faces), 28)

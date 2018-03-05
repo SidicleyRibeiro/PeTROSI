@@ -86,10 +86,6 @@ class MpfaD2D:
         vect_2 = p_1 - vert
         normal_vector = np.cross(vect_1, vect_2)
         area = sqrt(np.dot(normal_vector, normal_vector)) / 2.0
-        # re_sin = np.sin(self.get_vectors_angle(vect_1, vect_2))# + 1e-25
-        # area = (0.5)*self.get_vect_module(vect_1)*self.get_vect_module(vect_2)*re_sin
-        # if area < 0:
-        #     area = -area
         return area
 
     def mid_point(self, p1, p2):
@@ -122,11 +118,7 @@ class MpfaD2D:
         face_normal = self.area_vector(face_nodes[0], face_nodes[1], vol_cent)
         face_centroid = (face_nodes[0] + face_nodes[1])/2.0
         area_vector = sqrt(np.dot(face_normal, face_normal))
-
         h = np.dot(face_normal, face_centroid - vol_cent)/area_vector
-        # print("h: ", h)
-        # print(face_nodes)
-        # print(vol_cent)
         return h
 
 
@@ -446,10 +438,10 @@ class MpfaD2D:
                         self.B[v_ids[well_volume]][0] = well_pressure
             # print("Calculou face ", count, " de ", len(self.all_faces))
 
-        print(self.A)
-        print(self.B)
+        # print(self.A)
+        # print(self.B)
         volume_pressures = np.linalg.solve(self.A, self.B)
-        print(volume_pressures)
+        # print(volume_pressures)
         self.mb.tag_set_data(self.pressure_tag, self.all_volumes, volume_pressures.flatten())
         self.mb.write_file("pressure_field.vtk")
         return volume_pressures
