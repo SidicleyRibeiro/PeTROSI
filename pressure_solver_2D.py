@@ -86,7 +86,7 @@ class MpfaD2D:
         vect_2 = p_1 - vert
         normal_vector = np.cross(vect_1, vect_2)
         area = sqrt(np.dot(normal_vector, normal_vector)) / 2.0
-        return area
+        return area + 1e-15
 
     def mid_point(self, p1, p2):
         coords_p1 = self.mb.get_coords(p1)

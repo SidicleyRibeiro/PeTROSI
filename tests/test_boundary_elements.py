@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from pressure_solver_2D import MpfaD2D
 from mesh_preprocessor import MeshManager
-
+import nonconform_mesh_generator_test as nmg
 
 class PressureSolverTest(unittest.TestCase):
 
@@ -25,7 +25,8 @@ class PressureSolverTest(unittest.TestCase):
         self.mpfad_1 = MpfaD2D(self.mesh_1)
 
         self.mesh_2 = MeshManager('mesh_nonconform_test.vtk', dim=2)
-        self.mesh_2.load_data()
+        mb = nmg.crazy_mesh()
+        self.mesh_2.load_data(mb)
         self.mpfad_2 = MpfaD2D(self.mesh_2)
 
     def test_if_method_has_all_dirichlet_nodes(self):
@@ -49,8 +50,14 @@ class PressureSolverTest(unittest.TestCase):
     def test_if_method_has_all_intern_faces(self):
         self.assertEqual(len(self.mpfad_1.intern_faces), 12)
 
-    def test_load_data_neumann_from_vtk_with_usable_data_on_it(self):
+    def test_load_data_neumann_faces_from_vtk_with_usable_data_on_it(self):
         self.assertEqual(len(self.mpfad_2.neumann_faces), 28)
 
-    def test_load_data_dirichlet_from_vtk_with_usable_data_on_it(self):
+    def test_load_data_dirichlet_faces_from_vtk_with_usable_data_on_it(self):
         self.assertEqual(len(self.mpfad_2.dirichlet_faces), 28)
+
+    def test_load_data_dirichlet_nodes_from_vtk_with_usable_data_on_it(self):
+        self.assertEqual(len(self.mpfad_2.dirichlet_nodes), 30)
+
+    def test_load_data_neumann_nodes_from_vtk_with_usable_data_on_it(self):
+        self.assertEqual(len(self.mpfad_2.neumann_nodes), 26)

@@ -3,7 +3,7 @@ import numpy as np
 from pressure_solver_2D import MpfaD2D
 from mesh_preprocessor import MeshManager
 from pressure_solver_2D import InterpolMethod
-
+import nonconform_mesh_generator_test as nmg
 
 class PressureSolverTest(unittest.TestCase):
 
@@ -44,6 +44,12 @@ class PressureSolverTest(unittest.TestCase):
                                            dim_target=1, set_nodes=True)
         self.mpfad_3 = MpfaD2D(self.mesh_3)
         self.imd_3 = InterpolMethod(self.mpfad_3)
+
+        self.mesh_4 = MeshManager('mesh_nonconform_test.vtk', dim=2)
+        mb = nmg.crazy_mesh()
+        self.mesh_4.load_data(mb)
+        self.mpfad_4 = MpfaD2D(self.mesh_4)
+        self.imd_4 = InterpolMethod(self.mpfad_4)
 
     def test_linear_prob_with_struct_mesh_and_dyn_point_at_two_thirds(self):
         imd = InterpolMethod(self.mpfad_1, 2.0/3.0)
@@ -105,3 +111,12 @@ class PressureSolverTest(unittest.TestCase):
             node_weights = self.imd_1.by_lpew2(a_node)
             for volume, weight in node_weights.items():
                 self.assertAlmostEqual(weight, 0.25, delta=1e-12)
+
+    def test_linear_problem_vtk_non_conform_mesh(self):
+        self.mpfad_4.run_solver(self.imd_4.by_lpew2)
+        for a_volume in self.mesh_4.all_volumes:
+            local_pressure = self.mesh_4.mb.tag_get_data(
+                             self.mpfad_4.pressure_tag, a_volume)
+            coord_x = self.mesh_4.get_centroid(a_volume)[0]
+            self.assertAlmostEqual(
+                local_pressure[0][0], 1 - coord_x, delta=1e-15)

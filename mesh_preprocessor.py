@@ -8,7 +8,7 @@ from pymoab import topo_util
 
 class MeshManager:
 
-    def __init__(self, mesh_file, dim=3):
+    def __init__(self, mesh_file=None, dim=3):
 
         self.dimension = dim
         self.mb = core.Core()
@@ -68,19 +68,46 @@ class MeshManager:
         self.all_pressure_well_vols = np.asarray([], dtype='uint64')
         self.all_flow_rate_well_vols = np.asarray([], dtype='uint64')
 
-    def load_data(self):
-        neumann_ents_tag = self.mb.tag_get_handle('Neumann_entities')
+    def load_data(self, mb):
+        self.mb = mb
+        self.mtu = topo_util.MeshTopoUtil(self.mb)
+
+        self.dirichlet_tag = self.mb.tag_get_handle(
+            "Dirichlet")
+
+        self.neumann_tag = self.mb.tag_get_handle(
+            "Neumann")
+
+        self.perm_tag = self.mb.tag_get_handle(
+            "Permeability")
+
+        self.all_volumes = \
+            self.mb.get_entities_by_dimension(0, self.dimension)
+
+        self.all_nodes = self.mb.get_entities_by_dimension(self.root_set, 0)
+
+        self.mtu.construct_aentities(self.all_nodes)
+        self.all_faces = self.mb.get_entities_by_dimension(0, self.dimension-1)
+        self.dirichlet_faces = set()
+        self.neumann_faces = set()
+
+        neumann_ents_tag = self.mb.tag_get_handle("Neumann_entities")
         neumann_ents_set = self.mb.tag_get_data(neumann_ents_tag, 0)
-        print("SET", neumann_ents_set)
-        neumann_faces = self.mb.get_entities_by_type(neumann_ents_set, types.MBEDGE)
+        neumann_faces = self.mb.get_entities_by_type(
+                                    neumann_ents_set, types.MBEDGE)
         self.neumann_faces = self.neumann_faces | set(neumann_faces)
 
         dirichlet_ents_tag = self.mb.tag_get_handle('Dirichlet_entities')
         dirichlet_ents_set = self.mb.tag_get_data(dirichlet_ents_tag, 0)
-        dirichlet_faces = self.mb.tag_get_data(dirichlet_ents_set, types.MBEDGE)
+        dirichlet_faces = self.mb.get_entities_by_type(
+                                    dirichlet_ents_set, types.MBEDGE)
         self.dirichlet_faces = self.dirichlet_faces | set(dirichlet_faces)
-        print('dir', len(self.dirichlet_faces))
-        # print("TODAS AS FACES: ", len(self.all_faces))
+        self.dirichlet_faces = self.dirichlet_faces - self.neumann_faces
+
+        self.dirichlet_nodes = self.mb.get_entities_by_type(
+                                    dirichlet_ents_set, types.MBVERTEX)
+        self.neumann_nodes = self.mb.get_entities_by_type(
+                                    neumann_ents_set, types.MBVERTEX)
 
     def set_information(self, information_name, physicals_values,
                         dim_target, set_connect=False):
@@ -88,10 +115,12 @@ class MeshManager:
         information_tag = self.mb.tag_get_handle(information_name)
         for physical, value in physicals_values.items():
             for a_set in self.physical_sets:
-                physical_group = self.mb.tag_get_data(self.physical_tag, a_set, flat=True)
+                physical_group = self.mb.tag_get_data(
+                                        self.physical_tag, a_set, flat=True)
 
                 if physical_group == physical:
-                    group_elements = self.mb.get_entities_by_dimension(a_set, dim_target)
+                    group_elements = self.mb.get_entities_by_dimension(
+                                        a_set, dim_target)
 
                     if information_name == 'Dirichlet':
                         # print('DIR GROUP', len(group_elements), group_elements)
@@ -106,9 +135,11 @@ class MeshManager:
                         self.mb.tag_set_data(information_tag, element, value)
 
                         if set_connect:
-                            connectivities = self.mtu.get_bridge_adjacencies(element, 0, 0)
-                            self.mb.tag_set_data(
-                                information_tag, connectivities, np.repeat(value, len(connectivities)))
+                            connects = self.mtu.get_bridge_adjacencies(element, 0, 0)
+                            self.mb.tag_set_data(information_tag,
+                                                 connects,
+                                                 np.repeat(value,
+                                                           len(connects)))
 
         # self.mb.write_file('algo_ahora.vtk')
 
