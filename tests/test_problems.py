@@ -43,13 +43,20 @@ class PressureSolverTest(unittest.TestCase):
         self.mesh_3.set_boundary_condition('Neumann', {201: 0.0},
                                            dim_target=1, set_nodes=True)
         self.mpfad_3 = MpfaD2D(self.mesh_3)
-        self.imd_3 = InterpolMethod(self.mpfad_3)
 
-        self.mesh_4 = MeshManager('mesh_nonconform_test.vtk', dim=2)
-        mb = nmg.crazy_mesh()
-        self.mesh_4.load_data(mb)
+        self.mesh_4 = MeshManager('mesh_test_unstruct_layers.msh', dim=2)
+        self.mesh_4.set_media_property('Permeability', {1: K_2, 2: K_1},
+                                       dim_target=2)
+        self.mesh_4.set_boundary_condition('Dirichlet', {102: 1.0, 101: 0.0},
+                                           dim_target=1, set_nodes=True)
+        self.mesh_4.set_boundary_condition('Neumann', {201: 0.0},
+                                           dim_target=1, set_nodes=True)
         self.mpfad_4 = MpfaD2D(self.mesh_4)
-        self.imd_4 = InterpolMethod(self.mpfad_4)
+        # self.mesh_xconf = MeshManager('mesh_nonconform_test.vtk', dim=2)
+        # mb = nmg.crazy_mesh()
+        # self.mesh_xconf.load_data(mb)
+        # self.mpfad_xconf = MpfaD2D(self.mesh_xconf)
+        # self.imd_xconf = InterpolMethod(self.mpfad_xconf)
 
     def test_linear_prob_with_struct_mesh_and_dyn_point_at_two_thirds(self):
         imd = InterpolMethod(self.mpfad_1, 2.0/3.0)
@@ -138,12 +145,38 @@ class PressureSolverTest(unittest.TestCase):
                 self.assertAlmostEqual(
                     vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
 
+    def test_piece_wise_lin_prob_unstruct_with_dyn_point_at_two_thirds(self):
+        imd = InterpolMethod(self.mpfad_4, 2/3.0)
+        vols_press = self.mpfad_4.run_solver(imd.by_lpew2)
+        all_volumes = self.mesh_4.all_volumes
+        for a_volume, vol_pres in zip(all_volumes, vols_press):
+            coord_x = self.mesh_4.get_centroid(a_volume)[0]
+            if coord_x < 0.5:
+                self.assertAlmostEqual(
+                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-14)
+            else:
+                self.assertAlmostEqual(
+                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-14)
+
+    def test_piece_wise_lin_prob_unstruct_with_dyn_point_at_adj_point(self):
+        imd = InterpolMethod(self.mpfad_4, 1.0)
+        vols_press = self.mpfad_4.run_solver(imd.by_lpew2)
+        all_volumes = self.mesh_4.all_volumes
+        for a_volume, vol_pres in zip(all_volumes, vols_press):
+            coord_x = self.mesh_4.get_centroid(a_volume)[0]
+            if coord_x < 0.5:
+                self.assertAlmostEqual(
+                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-15)
+            else:
+                self.assertAlmostEqual(
+                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
+
 
     # def test_linear_problem_vtk_non_conform_mesh(self):
-    #     self.mpfad_4.run_solver(self.imd_4.by_lpew2)
-    #     for a_volume in self.mesh_4.all_volumes:
-    #         local_pressure = self.mesh_4.mb.tag_get_data(
-    #                          self.mpfad_4.pressure_tag, a_volume)
-    #         coord_x = self.mesh_4.get_centroid(a_volume)[0]
+    #     self.mpfad_xconf.run_solver(self.imd_xconf.by_lpew2)
+    #     for a_volume in self.mesh_xconf.all_volumes:
+    #         local_pressure = self.mesh_xconf.mb.tag_get_data(
+    #                          self.mpfad_xconf.pressure_tag, a_volume)
+    #         coord_x = self.mesh_xconf.get_centroid(a_volume)[0]
     #         self.assertAlmostEqual(
     #             local_pressure[0][0], 1 - coord_x, delta=1e-15)
