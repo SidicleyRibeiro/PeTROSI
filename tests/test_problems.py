@@ -35,7 +35,7 @@ class PressureSolverTest(unittest.TestCase):
         self.mpfad_2 = MpfaD2D(self.mesh_2)
         self.imd_2 = InterpolMethod(self.mpfad_2)
 
-        self.mesh_3 = MeshManager('geometry_vertical_layers.msh', dim=2)
+        self.mesh_3 = MeshManager('mesh_test_struct_layers.msh', dim=2)
         self.mesh_3.set_media_property('Permeability', {1: K_2, 2: K_1},
                                        dim_target=2)
         self.mesh_3.set_boundary_condition('Dirichlet', {102: 1.0, 101: 0.0},
@@ -112,11 +112,38 @@ class PressureSolverTest(unittest.TestCase):
             for volume, weight in node_weights.items():
                 self.assertAlmostEqual(weight, 0.25, delta=1e-12)
 
-    def test_linear_problem_vtk_non_conform_mesh(self):
-        self.mpfad_4.run_solver(self.imd_4.by_lpew2)
-        for a_volume in self.mesh_4.all_volumes:
-            local_pressure = self.mesh_4.mb.tag_get_data(
-                             self.mpfad_4.pressure_tag, a_volume)
-            coord_x = self.mesh_4.get_centroid(a_volume)[0]
-            self.assertAlmostEqual(
-                local_pressure[0][0], 1 - coord_x, delta=1e-15)
+    def test_piece_wise_lin_prob_struct_with_dyn_point_at_two_thirds(self):
+        imd = InterpolMethod(self.mpfad_3, 2/3.0)
+        vols_press = self.mpfad_3.run_solver(imd.by_lpew2)
+        all_volumes = self.mesh_3.all_volumes
+        for a_volume, vol_pres in zip(all_volumes, vols_press):
+            coord_x = self.mesh_3.get_centroid(a_volume)[0]
+            if coord_x < 0.5:
+                self.assertAlmostEqual(
+                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-15)
+            else:
+                self.assertAlmostEqual(
+                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
+
+    def test_piece_wise_lin_prob_struct_with_dyn_point_at_adj_point(self):
+        imd = InterpolMethod(self.mpfad_3, 1.0)
+        vols_press = self.mpfad_3.run_solver(imd.by_lpew2)
+        all_volumes = self.mesh_3.all_volumes
+        for a_volume, vol_pres in zip(all_volumes, vols_press):
+            coord_x = self.mesh_3.get_centroid(a_volume)[0]
+            if coord_x < 0.5:
+                self.assertAlmostEqual(
+                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-15)
+            else:
+                self.assertAlmostEqual(
+                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
+
+
+    # def test_linear_problem_vtk_non_conform_mesh(self):
+    #     self.mpfad_4.run_solver(self.imd_4.by_lpew2)
+    #     for a_volume in self.mesh_4.all_volumes:
+    #         local_pressure = self.mesh_4.mb.tag_get_data(
+    #                          self.mpfad_4.pressure_tag, a_volume)
+    #         coord_x = self.mesh_4.get_centroid(a_volume)[0]
+    #         self.assertAlmostEqual(
+    #             local_pressure[0][0], 1 - coord_x, delta=1e-15)
