@@ -72,14 +72,11 @@ class MeshManager:
         self.mb = mb
         self.mtu = topo_util.MeshTopoUtil(self.mb)
 
-        self.dirichlet_tag = self.mb.tag_get_handle(
-            "Dirichlet")
+        self.dirichlet_tag = self.mb.tag_get_handle("Dirichlet")
 
-        self.neumann_tag = self.mb.tag_get_handle(
-            "Neumann")
+        self.neumann_tag = self.mb.tag_get_handle("Neumann")
 
-        self.perm_tag = self.mb.tag_get_handle(
-            "Permeability")
+        self.perm_tag = self.mb.tag_get_handle("Permeability")
 
         self.all_volumes = \
             self.mb.get_entities_by_dimension(0, self.dimension)
