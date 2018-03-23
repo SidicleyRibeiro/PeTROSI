@@ -3,7 +3,7 @@ import numpy as np
 from pressure_solver_2D import MpfaD2D
 from mesh_preprocessor import MeshManager
 from pressure_solver_2D import InterpolMethod
-import nonconform_mesh_generator_test as nmg
+# import nonconform_mesh_generator_test as nmg
 
 class PressureSolverTest(unittest.TestCase):
 
@@ -171,6 +171,23 @@ class PressureSolverTest(unittest.TestCase):
                 self.assertAlmostEqual(
                     vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
 
+    def test_flux_conservative_dyn_point_at_adj_point(self):
+        imd = InterpolMethod(self.mesh_2, 1.0)
+        vols_press = self.mpfad_2.run_solver(imd.by_lpew2)
+        A = self.mpfad_2.A
+        B = self.mpfad_2.B
+        for i in range(len(B)):
+            residue = np.dot(A[i], vols_press) - B[i]
+            self.assertAlmostEqual(residue[0], 0.0, delta=1e-15)
+
+    def test_flux_conservative_dyn_point_at_two_thirds(self):
+        imd = InterpolMethod(self.mesh_2, 2.0/3.0)
+        vols_press = self.mpfad_2.run_solver(imd.by_lpew2)
+        A = self.mpfad_2.A
+        B = self.mpfad_2.B
+        for i in range(len(B)):
+            residue = np.dot(A[i], vols_press) - B[i]
+            self.assertAlmostEqual(residue[0], 0.0, delta=1e-15)
 
     # def test_linear_problem_vtk_non_conform_mesh(self):
     #     self.mpfad_xconf.run_solver(self.imd_xconf.by_lpew2)
