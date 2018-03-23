@@ -437,8 +437,8 @@ class MpfaD2D:
                         self.B[v_ids[well_volume]][0] = well_pressure
             # print("Calculou face ", count, " de ", len(self.all_faces))
 
-        print(self.A)
-        print(self.B)
+        # print(self.A)
+        # print(self.B)
         volume_pressures = np.linalg.solve(self.A, self.B)
         # print(volume_pressures)
         self.mb.tag_set_data(self.pressure_tag, self.all_volumes, volume_pressures.flatten())
@@ -561,8 +561,8 @@ class InterpolMethod(MpfaD2D):
             # print("cot_num: ", cot_num, crds_node, half_face, self.mesh_data.get_centroid(adjacent_volume))
             vector_pseudo_face = half_face - half_other_face
             normal_pseudo_face = self.area_vector(half_face,
-                                                        half_other_face,
-                                                        crds_node)
+                                                  half_other_face,
+                                                  crds_node)
             module_squared_vector = np.dot(vector_pseudo_face,
                                            vector_pseudo_face)
             K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume),
