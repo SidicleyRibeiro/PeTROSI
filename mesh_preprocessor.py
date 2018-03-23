@@ -200,7 +200,7 @@ class MeshManager:
         coords = coords[indices]
         inter_coord = sum(coords)/len(coords)
         vectors_inside = [inter_coord - a_coord for a_coord in coords]
-        print("VECTORS SORT: ", vectors_inside, indices)
+        # print("VECTORS SORT: ", vectors_inside, indices)
         total_area = 0
         for i in range(len(vectors_inside)):
             cross_product = np.cross(vectors_inside[i-1], vectors_inside[i])
@@ -224,7 +224,7 @@ class MeshManager:
                 connect_nodes_crds = connect_nodes_crds[indices]
                 connect_nodes = np.asarray(connect_nodes, dtype='uint64')
                 connect_nodes = connect_nodes[indices]
-                print("CONNECT_NODES: ", connect_nodes_crds, well_coords)
+                # print("CONNECT_NODES: ", connect_nodes_crds, well_coords)
                 if self._contains(well_coords, connect_nodes_crds)[0] == -1:
                     continue
 
@@ -233,7 +233,7 @@ class MeshManager:
                     if well_type == "Pressure_Well":
                         self.all_pressure_well_vols = np.append(
                             self.all_pressure_well_vols, volume)
-                        print("IN VOLUME: ", well_value)
+                        # print("IN VOLUME: ", well_value)
                         self.mb.tag_set_data(
                             self.pressure_well_tag, volume, np.asarray(well_value))
                         break
@@ -241,7 +241,7 @@ class MeshManager:
                     if well_type == "Flow_Rate_Well":
                         self.all_flow_rate_well_vols = np.append(
                             self.all_flow_rate_well_vols, volume)
-                        print("IN VOLUME: ", well_value)
+                        # print("IN VOLUME: ", well_value)
                         self.mb.tag_set_data(
                             self.flow_rate_well_tag, volume, np.asarray(well_value))
                         break
@@ -266,12 +266,12 @@ class MeshManager:
                         well_weights = []
                         for volume in adjacent_vols:
                             volume_area = self.get_area(volume)
-                            print("AREAS: ", volume_area)
+                            # print("AREAS: ", volume_area)
                             well_weight_sum += volume_area
                             well_weights.append(volume_area)
                         well_weights = np.asarray(well_weights, dtype='f8')
                         well_weights = (well_weights / well_weight_sum) * well_value
-                        print("IN NODE: ", len(adjacent_vols))
+                        # print("IN NODE: ", len(adjacent_vols))
 
                         if well_type == "Flow_Rate_Well":
                             self.all_flow_rate_well_vols = np.append(
@@ -286,7 +286,7 @@ class MeshManager:
                                 self.all_pressure_well_vols, adjacent_vols)
                             self.mb.tag_set_data(
                                 self.pressure_well_tag, adjacent_vols, np.asarray(well_value))
-                            print("IN NODE bla: ", well_value)
+                            # print("IN NODE bla: ", well_value)
                             break
 
                         if well_type == "Flow_Rate_Well":
@@ -294,7 +294,7 @@ class MeshManager:
                                 self.all_flow_rate_well_vols, adjacent_vols)
                             self.mb.tag_set_data(
                                 self.flow_rate_well_tag, adjacent_vols, np.asarray(well_value))
-                            print("IN NODE bla: ", well_value)
+                            # print("IN NODE bla: ", well_value)
                             break
 
 
