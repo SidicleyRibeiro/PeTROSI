@@ -50,6 +50,13 @@ class PressureSolverTest(unittest.TestCase):
     def test_if_method_has_all_intern_faces(self):
         self.assertEqual(len(self.mpfad_1.intern_faces), 12)
 
+    def test_matplot(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.plot([1,2,3])
+        plt.savefig('myfig')
+
     # def test_load_data_neumann_faces_from_vtk_with_usable_data_on_it(self):
     #     self.assertEqual(len(self.mpfad_2.neumann_faces), 28)
     #
