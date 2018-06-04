@@ -21,7 +21,9 @@ Physical Line(201) = {3, 1};
 
 Physical Surface(1) = {6};
 
-Transfinite Line{1, 2} = 4;
-Transfinite Line{3, 4} = 4;
-//Transfinite Surface{6} = {1, 2, 3, 4};
+Transfinite Line{1} = 35;
+Transfinite Line{2} = 35;
+Transfinite Line{3} = 35;
+Transfinite Line{4} = 35;
+Transfinite Surface{6} = {1, 2, 3, 4};
 Recombine Surface {6};
