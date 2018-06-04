@@ -166,10 +166,10 @@ class PressureSolverTest(unittest.TestCase):
             coord_x = self.mesh_4.get_centroid(a_volume)[0]
             if coord_x < 0.5:
                 self.assertAlmostEqual(
-                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-15)
+                    vol_pres[0], (-2/3.0)*coord_x + 1, delta=1e-13)
             else:
                 self.assertAlmostEqual(
-                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-15)
+                    vol_pres[0], (4/3.0)*(1 - coord_x), delta=1e-13)
 
     def test_flux_conservative_dyn_point_at_adj_point(self):
         imd = InterpolMethod(self.mesh_2, 1.0)

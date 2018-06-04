@@ -146,10 +146,12 @@ class MpfaD2D:
             vector_pseudo_face = half_face - half_other_face
             normal_pseudo_face = self.area_vector(half_face, half_other_face, crds_node)
             module_squared_vector = np.dot(vector_pseudo_face, vector_pseudo_face)
-            K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume), vector_pseudo_face)/module_squared_vector
+            # K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume), vector_pseudo_face)/module_squared_vector
+
+            K_bar_t = self.K_t_X(np.asarray([half_other_face, half_face]), centroid_volume, perm_volume)
 
             csi_num += K_bar_n * cot_num + K_bar_t
-            # print("")
+            # print("CSI NUM", crds_node, K_bar_n, K_bar_t)
             K_den_n = self._get_conormal_prod(np.asarray([crds_node, half_face]), centroid_volume, perm_volume)
 
             aux_dot_den = np.dot(half_face - crds_node, centroid_volume - crds_node)
@@ -158,6 +160,7 @@ class MpfaD2D:
             K_den_t = self.K_t_X(np.asarray([crds_node, half_face]), centroid_volume, perm_volume)
 
             csi_den += K_den_n * cot_den + K_den_t
+            print("CSI DEN", crds_node, K_den_n, K_den_t)
 
         csi = csi_num / csi_den
         # print("csi: ", csi, crds_node, half_face)
@@ -255,6 +258,12 @@ class MpfaD2D:
         nodes_weights = {}
         for a_node in self.intern_nodes | self.neumann_nodes:
             nodes_weights[a_node] = method(a_node)
+
+        for node, weights in nodes_weights.items():
+            coord = self.mb.get_coords([node])
+            # print("NODE WEIGHTS:", coord, weights)
+
+
         return nodes_weights
 
     def _node_treatment(self, node, nodes_weights, id_1st, id_2nd, v_ids,
@@ -273,6 +282,7 @@ class MpfaD2D:
 
         if node in self.neumann_nodes:
             neumann_factor = self.neumann_weight(node)
+            # print("NEU NODE FACTOR:", neumann_factor)
             value = transm * face_area * cross_term * (- neumann_factor)
             self.B[id_1st][0] += value * is_2nd
             self.B[id_2nd][0] += - value * is_2nd
@@ -567,9 +577,9 @@ class InterpolMethod(MpfaD2D):
                                            vector_pseudo_face)
             K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume),
                 vector_pseudo_face)/module_squared_vector
-
+            # print("COMP NUM:", K_bar_n, cot_num, K_bar_t)
             csi_num += K_bar_n * cot_num + K_bar_t
-            # print("")
+            # print("CSI NUM:", csi_num)
             K_den_n = self._get_conormal_prod(
                 np.asarray([crds_node, half_face]),
                 centroid_volume, perm_volume)
@@ -585,7 +595,9 @@ class InterpolMethod(MpfaD2D):
                                                   centroid_volume,
                                                   perm_volume)
 
+            # print("COMP DEN:", K_den_n, cot_den, K_den_t)
             csi_den += K_den_n * cot_den + K_den_t
+            # print("CSI DEN:", csi_den)
 
         csi = csi_num / csi_den
         # print("csi: ", csi, crds_node, half_face)
@@ -648,6 +660,9 @@ class InterpolMethod(MpfaD2D):
 
         node_weight = K_ni_first * neta_1st * csi_first + \
                       K_ni_second * neta_2nd * csi_second
+
+        # print("VALUES: ", K_ni_first, neta_1st, csi_first)
+        #
         # print("weight: ", node_weight, crds_node, cent_adj_vol)
         return node_weight
 
