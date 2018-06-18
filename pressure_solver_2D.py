@@ -1,10 +1,11 @@
 # coding: utf-8
 from math import sqrt
 from pymoab import types
+from interpolation_methods import InterpolMethods
 import numpy as np
 
 
-class MpfaD2D:
+class MpfaD2D(InterpolMethods):
 
     def __init__(self, mesh_data):
         self.mesh_data = mesh_data
@@ -42,206 +43,36 @@ class MpfaD2D:
         self.A = np.zeros([len(self.all_volumes), len(self.all_volumes)])
         self.B = np.zeros([len(self.all_volumes), 1])
 
-    def get_vect_module(self, vector):
-        vector = np.array(vector)
-        dot_product = np.dot(vector, vector)
-        module = sqrt(dot_product)
-        return module
-
-    def get_vectors_angle(self, vect_1, vect_2):
-        dot_product = np.dot(vect_1, vect_2)
-        module_prod = (self.get_vect_module(vect_1) *
-                       self.get_vect_module(vect_2))
-        try:
-            arc = dot_product / module_prod
-            if np.fabs(arc) > 1:
-                raise ValueError('Arco maior que 1 !!!')
-        except ValueError:
-            arc = np.around(arc)
-
-        angle = np.arccos(arc)
-        return angle
-
-    def area_vector(self, p_1, p_2, ref):
-        tan_vector = p_2 - p_1
-        ref_vector = p_2 - ref
-        area_normal = np.array([-tan_vector[1],
-                                tan_vector[0],
-                                tan_vector[2]])
-        if np.dot(area_normal, ref_vector) <= 0:
-            area_normal = -1.0*area_normal
-
-        return area_normal
-
-    def cross_area_vector(self, p_1, p_2, ref):
-        area_normal = self.area_vector(p_1, p_2, ref)
-        tan_vector = np.array([-area_normal[1],
-                       area_normal[0],
-                       area_normal[2]])
-        return tan_vector
-
-    def trian_area(self, p_1, p_2, vert):
-        vect_1 = p_2 - vert
-        vect_2 = p_1 - vert
-        normal_vector = np.cross(vect_1, vect_2)
-        area = sqrt(np.dot(normal_vector, normal_vector)) / 2.0
-        return area + 1e-15
-
-    def mid_point(self, p1, p2):
-        coords_p1 = self.mb.get_coords(p1)
-        coords_p2 = self.mb.get_coords(p2)
-        mid_p = (coords_p1 + coords_p2)/2.0
-        return mid_p
-
-    def _get_conormal_prod(self, node_face_coords, vol_centroid, perm):
-        face_normal = self.area_vector(
-            node_face_coords[0], node_face_coords[1], vol_centroid)
-        squared_face = np.dot(face_normal, face_normal)
-        #print("face_normal: ", face_normal, "perm:", perm, "module_2: ", squared_face)
-        conormal = np.dot(np.dot(face_normal, perm), face_normal)/squared_face
-        # print("conormal: ", conormal, conormal == 1.0)
-        return conormal
-
-    def K_t_X(self, node_face_coords, vol_centroid, perm):
-        count_wise_face = self.cross_area_vector(
-            node_face_coords[0], node_face_coords[1], vol_centroid)
-        face_normal = self.area_vector(
-            node_face_coords[0], node_face_coords[1], vol_centroid)
-
-        squared_face = np.dot(face_normal, face_normal)
-        K_t = np.dot(np.dot(face_normal, perm), count_wise_face)/squared_face
-        # print("K_t: ", K_t, K_t == 0.0)
-        return K_t
-
-    def get_face_dist(self, face_nodes, vol_cent, perm):
-        face_normal = self.area_vector(face_nodes[0], face_nodes[1], vol_cent)
-        face_centroid = (face_nodes[0] + face_nodes[1])/2.0
-        area_vector = sqrt(np.dot(face_normal, face_normal))
-        h = np.dot(face_normal, face_centroid - vol_cent)/area_vector
-        return h
-
-
-    def face_weight(self, interp_node, face):
-        crds_node = self.mb.get_coords([interp_node])
-        adjacent_volumes = self.mb.get_adjacencies(face, 2)
-        half_face = self.mtu.get_average_position([face])
-        csi_num = 0
-        csi_den = 0
-        for adjacent_volume in adjacent_volumes:
-            centroid_volume = self.mesh_data.get_centroid(adjacent_volume)
-            perm_volume = self.mb.tag_get_data(self.perm_tag, adjacent_volume).reshape([3, 3])
-
-            interp_node_adj_faces = set(self.mtu.get_bridge_adjacencies(interp_node, 0, 1))
-            adjacent_volume_adj_faces = set(self.mtu.get_bridge_adjacencies(adjacent_volume, 1, 1))
-
-            faces = np.asarray(list(interp_node_adj_faces & adjacent_volume_adj_faces), dtype='uint64')
-            other_face = faces[faces != face]
-            half_other_face = self.mtu.get_average_position(other_face)
-
-            K_bar_n = self._get_conormal_prod(np.asarray([half_other_face, half_face]), centroid_volume, perm_volume)
-
-            aux_dot_num = np.dot(crds_node - half_other_face, half_face - half_other_face)
-            cot_num = aux_dot_num / (2.0 * self.trian_area(half_face, half_other_face, crds_node))
-            # print("cot_num: ", cot_num, crds_node, half_face, self.mesh_data.get_centroid(adjacent_volume))
-            vector_pseudo_face = half_face - half_other_face
-            normal_pseudo_face = self.area_vector(half_face, half_other_face, crds_node)
-            module_squared_vector = np.dot(vector_pseudo_face, vector_pseudo_face)
-            # K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume), vector_pseudo_face)/module_squared_vector
-
-            K_bar_t = self.K_t_X(np.asarray([half_other_face, half_face]), centroid_volume, perm_volume)
-
-            csi_num += K_bar_n * cot_num + K_bar_t
-            # print("CSI NUM", crds_node, K_bar_n, K_bar_t)
-            K_den_n = self._get_conormal_prod(np.asarray([crds_node, half_face]), centroid_volume, perm_volume)
-
-            aux_dot_den = np.dot(half_face - crds_node, centroid_volume - crds_node)
-            cot_den = aux_dot_den / (2.0 * self.trian_area(half_face, centroid_volume, crds_node))
-
-            K_den_t = self.K_t_X(np.asarray([crds_node, half_face]), centroid_volume, perm_volume)
-
-            csi_den += K_den_n * cot_den + K_den_t
-            print("CSI DEN", crds_node, K_den_n, K_den_t)
-
-        csi = csi_num / csi_den
-        # print("csi: ", csi, crds_node, half_face)
-        return csi
-
-
-
-    def partial_weight(self, node, adjacent_volume):
-        crds_node = self.mb.get_coords([node])
-        perm_adjacent_volume = self.mb.tag_get_data(self.perm_tag, adjacent_volume).reshape([3, 3])
-        cent_adj_vol = self.mesh_data.get_centroid(adjacent_volume)
-
-        adjacent_faces = list(set(self.mtu.get_bridge_adjacencies(node, 0, 1)) &
-                              set(self.mtu.get_bridge_adjacencies(adjacent_volume, 1, 1)))
-        first_face = adjacent_faces[0]
-        second_face = adjacent_faces[1]
-
-        half_first_face = self.mtu.get_average_position([first_face])
-        half_second_face = self.mtu.get_average_position([second_face])
-
-        K_ni_first = self._get_conormal_prod(np.asarray([crds_node, half_first_face]),
-                           cent_adj_vol, perm_adjacent_volume)
-        K_ni_second = self._get_conormal_prod(np.asarray([crds_node, half_second_face]),
-                            cent_adj_vol, perm_adjacent_volume)
-
-        nodes_first_face = self.mb.get_adjacencies(first_face, 0)
-        nodes_second_face = self.mb.get_adjacencies(second_face, 0)
-
-        coords_nodes_first_face = self.mb.get_coords(nodes_first_face).reshape([2, 3])
-        coords_nodes_second_face = self.mb.get_coords(nodes_second_face).reshape([2, 3])
-
-        h_first = self.get_face_dist(coords_nodes_first_face, cent_adj_vol, perm_adjacent_volume)
-        h_second = self.get_face_dist(coords_nodes_second_face, cent_adj_vol, perm_adjacent_volume)
-
-        half_vect_first_face = half_first_face - crds_node
-        half_vect_second_node = half_second_face - crds_node
-
-        half_modsqrd_first_face = sqrt(np.dot(half_vect_first_face, half_vect_first_face))
-        half_modsqrd_second_face = sqrt(np.dot(half_vect_second_node, half_vect_second_node))
-
-        neta_first = half_modsqrd_first_face / h_first
-        neta_second = half_modsqrd_second_face / h_second
-        # print("netas: ", neta_first, neta_second, h_first, h_second, crds_node, cent_adj_vol)
-        csi_first = self.face_weight(node, first_face)
-        csi_second = self.face_weight(node, second_face)
-
-        node_weight = K_ni_first * neta_first * csi_first + K_ni_second * neta_second * csi_second
-        # print("weight: ", node_weight, crds_node, cent_adj_vol)
-        return node_weight
-
-
-
     def neumann_weight(self, neumann_node):
         adjacent_faces = self.mtu.get_bridge_adjacencies(neumann_node, 0, 1)
-        #print len(face_adj)
-        coords_neumann_node = self.mb.get_coords([neumann_node])
+        # print(len(face_adj))
+        crds_neum_node = self.mb.get_coords([neumann_node])
         neumann_term = 0
         for face in adjacent_faces:
-            try:
-                neu_flow_rate = self.mb.tag_get_data(self.neumann_tag, face)
-                face_nodes = self.mtu.get_bridge_adjacencies(face, 0, 0)
-                other_node = np.extract(face_nodes != np.array([neumann_node]), face_nodes)
-                #print pts_adj_face[0], pts_adj_face[1], neumann_node, other_node
-                other_node = np.asarray(other_node, dtype='uint64')
-                coords_other_node = self.mb.get_coords(other_node)
-                #print other_node, coords_other_node, len(face_adj)
-                half_face = self.mtu.get_average_position([face])
-
-                csi_neu = self.face_weight(neumann_node, face)
-                #print csi_neu, half_face, coords_neumann_node
-                #print csi_neu, coords_neumann_node, coords_other_node, half_face, len(face_adj)
-                module_half_face = self.get_vect_module(half_face - coords_neumann_node)
-                neumann_term += (1 + csi_neu) * module_half_face * neu_flow_rate
-                # print("Teste neumann: ", half_face, neu_flow_rate)
-            except RuntimeError:
+            if face not in set(self.neumann_nodes):
                 continue
+            neu_flow_rate = self.mb.tag_get_data(self.neumann_tag, face)
+            face_nodes = self.mtu.get_bridge_adjacencies(face, 0, 0)
+            other_node = np.extract(face_nodes != np.array([neumann_node]),
+                                    face_nodes)
+            # print(pts_adj_face[0], pts_adj_face[1], neumann_node, other_node)
+            other_node = np.asarray(other_node, dtype='uint64')
+            coords_other_node = self.mb.get_coords(other_node)
+            # print(other_node, coords_other_node, len(face_adj))
+            half_face = self.mtu.get_average_position([face])
+
+            csi_neu = self._get_face_weight(neumann_node, face)
+            # print(csi_neu, half_face, crds_neum_node)
+            # print (csi_neu, crds_neum_node,
+            #        coords_other_node, half_face, len(face_adj))
+            module_half_face = self.get_vect_module(half_face - crds_neum_node)
+            neumann_term += (1 + csi_neu) * module_half_face * neu_flow_rate
+            # print("Teste neumann: ", half_face, neu_flow_rate)
 
         adjacent_blocks = self.mtu.get_bridge_adjacencies(neumann_node, 0, 2)
         block_weight_sum = 0
         for a_block in adjacent_blocks:
-            block_weight = self.partial_weight(neumann_node, a_block)
+            block_weight = self._get_volume_weight(neumann_node, a_block, 0.5)
             block_weight_sum += block_weight
         neumann_term = neumann_term / block_weight_sum
         # print("Neumann term: ", neumann_term)
@@ -262,7 +93,6 @@ class MpfaD2D:
         for node, weights in nodes_weights.items():
             coord = self.mb.get_coords([node])
             # print("NODE WEIGHTS:", coord, weights)
-
 
         return nodes_weights
 
@@ -525,158 +355,3 @@ class MpfaD2D:
     #             face_grad[face][a_volume] = grad_p
     #
     #     return face_grad
-
-
-class InterpolMethod(MpfaD2D):
-
-    def __init__(self, mesh_data, dist_factor=0.5):
-        self.mesh_data = mesh_data
-        self.dist_factor = dist_factor
-
-    def _flux_term(self, vector_1st, permeab, vector_2nd, face_area):
-        aux_1 = np.dot(vector_1st, permeab)
-        aux_2 = np.dot(aux_1, vector_2nd)
-        flux_term = aux_2 / face_area
-        return flux_term
-
-    def _get_face_weight(self, interp_node, face):
-        crds_node = self.mesh_data.mb.get_coords([interp_node])
-        adjacent_volumes = self.mesh_data.mb.get_adjacencies(face, 2)
-        half_face = self.mesh_data.mtu.get_average_position([face])
-        csi_num = 0
-        csi_den = 0
-        for adjacent_volume in adjacent_volumes:
-            centroid_volume = self.mesh_data.get_centroid(adjacent_volume)
-            perm_volume = self.mesh_data.mb.tag_get_data(
-                self.mesh_data.perm_tag, adjacent_volume).reshape([3, 3])
-
-            interp_node_adj_faces = set(
-                self.mesh_data.mtu.get_bridge_adjacencies(interp_node, 0, 1))
-            adjacent_volume_adj_faces = set(
-                self.mesh_data.mtu.get_bridge_adjacencies(adjacent_volume, 1, 1))
-
-            faces = np.asarray(list(
-                interp_node_adj_faces & adjacent_volume_adj_faces), dtype='uint64')
-            other_face = faces[faces != face]
-            half_other_face = self.mesh_data.mtu.get_average_position(other_face)
-
-            K_bar_n = self._get_conormal_prod(
-                np.asarray([half_other_face, half_face]),
-                centroid_volume, perm_volume)
-
-            aux_dot_num = np.dot(
-                crds_node - half_other_face, half_face - half_other_face)
-            cot_num = aux_dot_num / (2.0 * self.trian_area(
-                half_face, half_other_face, crds_node))
-            # print("cot_num: ", cot_num, crds_node, half_face, self.mesh_data.get_centroid(adjacent_volume))
-            vector_pseudo_face = half_face - half_other_face
-            normal_pseudo_face = self.area_vector(half_face,
-                                                  half_other_face,
-                                                  crds_node)
-            module_squared_vector = np.dot(vector_pseudo_face,
-                                           vector_pseudo_face)
-            K_bar_t = np.dot(np.dot(normal_pseudo_face, perm_volume),
-                vector_pseudo_face)/module_squared_vector
-            # print("COMP NUM:", K_bar_n, cot_num, K_bar_t)
-            csi_num += K_bar_n * cot_num + K_bar_t
-            # print("CSI NUM:", csi_num)
-            K_den_n = self._get_conormal_prod(
-                np.asarray([crds_node, half_face]),
-                centroid_volume, perm_volume)
-
-            aux_dot_den = np.dot(half_face - crds_node,
-                                 centroid_volume - crds_node)
-            cot_den = aux_dot_den / (
-                2.0 * self.trian_area(half_face,
-                                            centroid_volume,
-                                            crds_node))
-
-            K_den_t = self.K_t_X(np.asarray([crds_node, half_face]),
-                                                  centroid_volume,
-                                                  perm_volume)
-
-            # print("COMP DEN:", K_den_n, cot_den, K_den_t)
-            csi_den += K_den_n * cot_den + K_den_t
-            # print("CSI DEN:", csi_den)
-
-        csi = csi_num / csi_den
-        # print("csi: ", csi, crds_node, half_face)
-        return csi
-
-    def _get_neta(self, face, intern_node, cent_node, cent_adj_vol, vol_perm):
-        half_face_vect = cent_node - intern_node
-        half_face = sqrt(np.dot(half_face_vect, half_face_vect))
-        face_nodes = self.mesh_data.mb.get_adjacencies(face, 0)
-        face_nodes_crds = self.mesh_data.mb.get_coords(face_nodes).reshape([2, 3])
-        height = self.get_face_dist(face_nodes_crds,
-                                          cent_adj_vol,
-                                          vol_perm)
-        neta = half_face / height
-        return neta
-
-    def _get_dynamic_point(self, crds_node, node, face, dist_factor):
-        face_nodes = self.mesh_data.mb.get_adjacencies(face, 0)
-        face_nodes = np.asarray(face_nodes, dtype='uint64')
-        other_node = face_nodes[face_nodes != node]
-        other_crds = self.mesh_data.mb.get_coords(other_node)
-        tan_vector = other_crds - crds_node
-        dynamic_point = crds_node + dist_factor * tan_vector
-        return dynamic_point
-
-    def _get_volume_weight(self, node, adjacent_volume, dist_factor):
-        crds_node = self.mesh_data.mb.get_coords([node])
-        perm_adjacent_volume = self.mesh_data.mb.tag_get_data(
-            self.mesh_data.perm_tag, adjacent_volume).reshape([3, 3])
-        cent_adj_vol = self.mesh_data.get_centroid(adjacent_volume)
-
-        adjacent_faces = list(set(self.mesh_data.mtu.get_bridge_adjacencies(node, 0, 1)) &
-                              set(self.mesh_data.mtu.get_bridge_adjacencies(adjacent_volume, 1, 1)))
-        first_face = adjacent_faces[0]
-        second_face = adjacent_faces[1]
-        dyn_point_1st = self._get_dynamic_point(crds_node,
-                                                node,
-                                                first_face,
-                                                dist_factor)
-        dyn_point_2nd = self._get_dynamic_point(crds_node,
-                                                node,
-                                                second_face,
-                                                dist_factor)
-        K_ni_first = self._get_conormal_prod(np.asarray([crds_node,
-                                                   dyn_point_1st]),
-                                                   cent_adj_vol,
-                                                   perm_adjacent_volume)
-        K_ni_second = self._get_conormal_prod(np.asarray([crds_node,
-                                                    dyn_point_2nd]),
-                                                    cent_adj_vol,
-                                                    perm_adjacent_volume)
-
-        neta_1st = self._get_neta(first_face, crds_node, dyn_point_1st,
-                                  cent_adj_vol, perm_adjacent_volume)
-        neta_2nd = self._get_neta(second_face, crds_node, dyn_point_2nd,
-                                  cent_adj_vol, perm_adjacent_volume)
-
-        csi_first = self._get_face_weight(node, first_face)
-        csi_second = self._get_face_weight(node, second_face)
-
-        node_weight = K_ni_first * neta_1st * csi_first + \
-                      K_ni_second * neta_2nd * csi_second
-
-        # print("VALUES: ", K_ni_first, neta_1st, csi_first)
-        #
-        # print("weight: ", node_weight, crds_node, cent_adj_vol)
-        return node_weight
-
-    def by_lpew2(self, node):
-        # node = np.asarray([node], dtype='uint64')
-        # print("NODE", node, self.mesh_data.mb.get_coords([node]))
-        vols_around = self.mesh_data.mb.get_adjacencies([node], 2)
-        weight_sum = 0.0
-        weights = np.array([])
-        for a_volume in vols_around:
-            weight = self._get_volume_weight(node, a_volume, self.dist_factor)
-            weights = np.append(weights, weight)
-            weight_sum += weight
-        weights = weights / weight_sum
-        node_weights = {
-            vol: weight for vol, weight in zip(vols_around, weights)}
-        return node_weights
